@@ -1,0 +1,29 @@
+{
+  "name": "hookrelay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HookRelay — reliable webhook delivery service.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=@hookrelay/api",
+    "dev:dashboard": "npm run dev --workspace=@hookrelay/dashboard",
+    "build:all": "npm run build --workspaces --if-present",
+    "lint:all": "eslint \"{apps,packages}/**/*.{ts,tsx}\" --max-warnings=0",
+    "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,json,md}\"",
+    "typecheck": "tsc -b --pretty"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.0",
+    "eslint": "^8.57.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
