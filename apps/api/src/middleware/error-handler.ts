@@ -1,6 +1,7 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import type { ApiErrorResponse } from '@hookrelay/shared';
 import type { AppConfig } from '../config/environment.js';
+import { HttpError } from '../errors/http-error.js';
 
 /**
  * Catch-all handler for requests that matched no route.
@@ -40,6 +41,18 @@ function resolveStatus(error: unknown): number {
  */
 export function createErrorHandler(config: AppConfig): ErrorRequestHandler {
   return (error, _req, res, _next) => {
+    // Expected, well-described failures (duplicate email, bad credentials)
+    // are part of the API contract and are not logged as crashes.
+    if (error instanceof HttpError) {
+      const body: ApiErrorResponse = {
+        error: error.message,
+        code: error.code,
+      };
+
+      res.status(error.status).json(body);
+      return;
+    }
+
     const status = resolveStatus(error);
     const isServerError = status >= 500;
 

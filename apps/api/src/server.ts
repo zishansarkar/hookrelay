@@ -2,13 +2,14 @@ import type { Server } from 'node:http';
 import { createApp } from './app.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { loadConfig } from './config/environment.js';
+import { closeRedisConnection, verifyRedisConnection } from './config/redis.js';
 
 /** How long a graceful shutdown may take before connections are force-closed. */
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 /**
  * Stops accepting new connections, drains the in-flight ones and closes the
- * MongoDB connection.
+ * database and Redis connections.
  */
 function registerShutdownHandlers(server: Server): void {
   let isShuttingDown = false;
@@ -33,14 +34,17 @@ function registerShutdownHandlers(server: Server): void {
         console.error('[hookrelay-api] failed to close the HTTP server:', closeError);
       }
 
-      void disconnectDatabase()
-        .catch((databaseError: unknown) => {
+      void Promise.allSettled([
+        disconnectDatabase().catch((databaseError: unknown) => {
           console.error('[hookrelay-api] failed to close the MongoDB connection:', databaseError);
-        })
-        .finally(() => {
-          clearTimeout(forceExit);
-          process.exit(closeError ? 1 : 0);
-        });
+        }),
+        closeRedisConnection().catch((redisError: unknown) => {
+          console.error('[hookrelay-api] failed to close the Redis connection:', redisError);
+        }),
+      ]).finally(() => {
+        clearTimeout(forceExit);
+        process.exit(closeError ? 1 : 0);
+      });
     });
 
     server.closeIdleConnections();
@@ -54,6 +58,7 @@ async function main(): Promise<void> {
   const config = loadConfig();
 
   await connectDatabase();
+  await verifyRedisConnection();
 
   const app = createApp(config);
   const server = app.listen(config.port, () => {

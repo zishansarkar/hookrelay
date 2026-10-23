@@ -20,9 +20,13 @@ export interface GeneratedApiKey {
 
 /**
  * Stored representation of an API key. The `key` column holds the SHA-256
- * hash of the issued key, never the key itself.
+ * hash of the issued key, never the key itself. It is excluded from queries
+ * and from JSON output so it cannot leak through the API by accident.
  */
-export type ApiKeyDocument = ApiKeyRecord;
+export type ApiKeyDocument = Omit<ApiKeyRecord, 'keyPrefix'> & {
+  key: string;
+  lastFour: string;
+};
 
 /**
  * Placeholder for "no extra instance/query/virtual methods". `{}` is rejected
@@ -53,7 +57,8 @@ const ApiKeySchema = new Schema<
   {
     id: { type: String, required: true, unique: true, default: () => uuidv4() },
     developerId: { type: String, required: true, index: true },
-    key: { type: String, required: true, unique: true, index: true },
+    key: { type: String, required: true, unique: true, index: true, select: false },
+    lastFour: { type: String, required: true },
     name: { type: String, required: true, trim: true },
     isActive: { type: Boolean, required: true, default: true },
     createdAt: { type: Date, required: true, default: () => new Date() },
@@ -64,6 +69,7 @@ const ApiKeySchema = new Schema<
     toJSON: {
       transform: (_doc, ret: Record<string, unknown>) => {
         delete ret.__v;
+        delete ret.key;
         return ret;
       },
     },
