@@ -24,7 +24,21 @@ const MAX_RESPONSE_BODY_BYTES = 100 * 1024;
 
 interface HttpResponseResult {
   statusCode: number;
+  responseHeaders: Record<string, string>;
   responseBody: string;
+}
+
+interface AttemptDeliveryResult extends DeliveryResult {
+  requestHeaders: Record<string, string>;
+  responseHeaders: Record<string, string>;
+}
+
+function normalizeResponseHeaders(headers: IncomingMessage['headers']): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(headers)
+      .filter((entry): entry is [string, string | string[]] => entry[1] !== undefined)
+      .map(([name, value]) => [name, Array.isArray(value) ? value.join(', ') : value]),
+  );
 }
 
 function readResponseBody(response: IncomingMessage): Promise<string> {
@@ -107,6 +121,7 @@ async function sendHttpRequest(
       void readResponseBody(response).then((responseBody) => {
         resolve({
           statusCode: response.statusCode ?? 0,
+          responseHeaders: normalizeResponseHeaders(response.headers),
           responseBody,
         });
       }, reject);
@@ -131,7 +146,7 @@ function serializePayload(payload: unknown): string {
 async function deliver(
   jobData: WebhookJobData,
   isProduction: boolean,
-): Promise<DeliveryResult | null> {
+): Promise<AttemptDeliveryResult | null> {
   const event = await WebhookEvent.findOneAndUpdate(
     {
       id: jobData.eventId,
@@ -194,6 +209,8 @@ async function deliver(
     return {
       success,
       statusCode: response.statusCode,
+      requestHeaders: headers,
+      responseHeaders: response.responseHeaders,
       responseBody: response.responseBody,
       responseTimeMs,
       error: success ? null : `Receiver responded with HTTP ${response.statusCode}`,
@@ -202,6 +219,8 @@ async function deliver(
     return {
       success: false,
       statusCode: null,
+      requestHeaders: headers,
+      responseHeaders: {},
       responseBody: null,
       responseTimeMs: Math.round(performance.now() - startedAt),
       error: error instanceof Error ? error.message : String(error),
@@ -220,6 +239,8 @@ export async function processWebhookJob(data: WebhookJobData): Promise<void> {
     result = {
       success: false,
       statusCode: null,
+      requestHeaders: {},
+      responseHeaders: {},
       responseBody: null,
       responseTimeMs: Math.round(performance.now() - startedAt),
       error: processingError,
@@ -235,7 +256,9 @@ export async function processWebhookJob(data: WebhookJobData): Promise<void> {
     await DeliveryAttempt.create({
       eventId: data.eventId,
       attemptNumber: currentAttempt,
+      requestHeaders: result.requestHeaders,
       statusCode: result.statusCode,
+      responseHeaders: result.responseHeaders,
       responseBody: result.responseBody?.slice(0, MAX_RESPONSE_BODY_BYTES) ?? null,
       responseTimeMs: result.responseTimeMs,
       error: result.error,

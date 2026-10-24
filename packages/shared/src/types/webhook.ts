@@ -38,7 +38,9 @@ export interface DeliveryAttempt {
   id: string;
   eventId: string;
   attemptNumber: number;
+  requestHeaders?: Record<string, string>;
   statusCode: number | null;
+  responseHeaders?: Record<string, string>;
   responseBody: string | null;
   responseTimeMs: number | null;
   error: string | null;
@@ -51,6 +53,8 @@ export interface DeliveryAttempt {
 export interface DeliveryResult {
   success: boolean;
   statusCode: number | null;
+  requestHeaders?: Record<string, string>;
+  responseHeaders?: Record<string, string>;
   responseBody: string | null;
   responseTimeMs: number;
   error: string | null;

@@ -27,6 +27,7 @@ export interface WebhookJobData {
   attemptNumber: number;
   maxRetries: number;
   developerId: string;
+  replayId?: string;
 }
 
 export type WebhookJob = Job<WebhookJobData, void, string>;
@@ -75,7 +76,7 @@ export function getRetryDelayMs(attemptNumber: number): number | undefined {
  */
 export async function addWebhookJob(data: WebhookJobData): Promise<WebhookJob> {
   return webhookQueue.add(WEBHOOK_JOB_NAME, data, {
-    jobId: `${data.eventId}-attempt-${data.attemptNumber}`,
+    jobId: `${data.eventId}-attempt-${data.attemptNumber}${data.replayId ? `-replay-${data.replayId}` : ''}`,
     delay: getRetryDelayMs(data.attemptNumber),
   });
 }

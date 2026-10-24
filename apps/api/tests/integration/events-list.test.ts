@@ -108,4 +108,46 @@ describe('event list API', () => {
       pending: 1,
     });
   });
+
+  it('includes captured request and response headers in event delivery details', async () => {
+    await Developer.create({
+      id: developerId,
+      email: 'events-list@example.com',
+      passwordHash: 'test-hash',
+    });
+    const event = await WebhookEvent.create({
+      developerId,
+      targetUrl: 'https://receiver.example/hooks',
+      httpMethod: 'POST',
+      headers: { 'x-custom': 'value' },
+      payload: { event: 'test' },
+      status: DeliveryStatus.FAILED,
+    });
+    await DeliveryAttempt.create({
+      eventId: event.id,
+      attemptNumber: 1,
+      requestHeaders: {
+        'content-type': 'application/json',
+        'x-hookrelay-signature-256': 't=123,v1=signature',
+      },
+      statusCode: 500,
+      responseHeaders: { 'content-type': 'application/json' },
+      responseBody: '{"error":"failed"}',
+      responseTimeMs: 145,
+      error: 'Receiver responded with HTTP 500',
+    });
+
+    const response = await request(app)
+      .get(`/v1/events/${event.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.deliveryAttempts[0]).toMatchObject({
+      requestHeaders: {
+        'content-type': 'application/json',
+        'x-hookrelay-signature-256': 't=123,v1=signature',
+      },
+      responseHeaders: { 'content-type': 'application/json' },
+    });
+  });
 });

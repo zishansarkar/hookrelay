@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   DeliveryStatus,
   MAX_RETRIES,
@@ -117,6 +118,7 @@ export async function send(
       attemptNumber: 0,
       maxRetries: event.maxRetries,
       developerId: event.developerId,
+      replayId: randomUUID(),
     });
   } catch (error) {
     console.error('[hookrelay-api] failed to enqueue webhook job', error);
@@ -324,24 +326,36 @@ export async function replayEvent(developerId: string, eventId: string): Promise
   const signingSecret =
     (event.signingSecret as string | undefined) ?? config.hmacDefaultSecret ?? '';
 
+  const previousState = {
+    status: event.status,
+    attempts: event.attempts,
+    nextRetryAt: event.nextRetryAt,
+  };
   event.status = DeliveryStatus.QUEUED;
   event.attempts = 0;
   event.nextRetryAt = null;
   await event.save();
 
-  void addWebhookJob({
-    eventId: event.id,
-    targetUrl: event.targetUrl,
-    httpMethod: event.httpMethod,
-    headers: event.headers ?? {},
-    payload: event.payload,
-    signingSecret,
-    attemptNumber: 0,
-    maxRetries: event.maxRetries,
-    developerId: event.developerId,
-  }).catch((error: unknown) => {
+  try {
+    await addWebhookJob({
+      eventId: event.id,
+      targetUrl: event.targetUrl,
+      httpMethod: event.httpMethod,
+      headers: event.headers ?? {},
+      payload: event.payload,
+      signingSecret,
+      attemptNumber: 0,
+      maxRetries: event.maxRetries,
+      developerId: event.developerId,
+    });
+  } catch (error) {
     console.error('[hookrelay-api] failed to enqueue replay job', error);
-  });
+    event.status = previousState.status;
+    event.attempts = previousState.attempts;
+    event.nextRetryAt = previousState.nextRetryAt;
+    await event.save();
+    throw new HttpError(503, 'Event replay could not be queued', 'QUEUE_UNAVAILABLE');
+  }
 
   return toPublicEvent({
     id: event.id,

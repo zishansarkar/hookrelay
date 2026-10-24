@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext.js';
 import { AuthLayout } from './components/layout/AuthLayout.js';
@@ -9,7 +10,10 @@ import { EventsPage } from './pages/EventsPage.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { RegisterPage } from './pages/RegisterPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
-import { UsagePage } from './pages/UsagePage.js';
+
+const UsagePage = lazy(() =>
+  import('./pages/UsagePage.js').then((module) => ({ default: module.UsagePage })),
+);
 
 function ProtectedRoute() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -50,7 +54,20 @@ export default function App() {
           <Route path="/events" element={<EventsPage />} />
           <Route path="/events/:id" element={<EventDetailPage />} />
           <Route path="/api-keys" element={<ApiKeysPage />} />
-          <Route path="/usage" element={<UsagePage />} />
+          <Route
+            path="/usage"
+            element={
+              <Suspense
+                fallback={
+                  <div className="flex min-h-64 items-center justify-center">
+                    <Spinner className="size-6 text-blue-400" />
+                  </div>
+                }
+              >
+                <UsagePage />
+              </Suspense>
+            }
+          />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Route>

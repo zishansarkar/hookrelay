@@ -39,6 +39,11 @@ export interface UsageResponse {
   resetDate: string | Date;
 }
 
+export interface DailyUsageStat {
+  date: string;
+  count: number;
+}
+
 export interface EventListParams {
   page?: number;
   limit?: number;
@@ -139,6 +144,9 @@ export const eventsApi = {
     return getData(apiClient.get('/v1/events/stats'));
   },
   async replay(eventId: string): Promise<WebhookEvent> {
+    return eventsApi.replayEvent(eventId);
+  },
+  async replayEvent(eventId: string): Promise<WebhookEvent> {
     const result = await getData<{ event: WebhookEvent }>(
       apiClient.post(`/v1/events/${encodeURIComponent(eventId)}/replay`),
     );
@@ -149,5 +157,14 @@ export const eventsApi = {
 export const usageApi = {
   get(): Promise<UsageResponse> {
     return getData(apiClient.get('/v1/usage'));
+  },
+  getCurrent(): Promise<UsageResponse> {
+    return getData(apiClient.get('/v1/usage'));
+  },
+  async getDailyStats(): Promise<DailyUsageStat[]> {
+    const result = await getData<{ dailyUsage: DailyUsageStat[] }>(
+      apiClient.get('/v1/usage/daily'),
+    );
+    return result.dailyUsage;
   },
 };

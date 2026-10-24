@@ -1,6 +1,6 @@
 import { PLAN_LIMITS, type Plan } from '@hookrelay/shared';
 import { getRedisConnection } from '../config/redis.js';
-import { Developer } from '../models/index.js';
+import { Developer, WebhookEvent } from '../models/index.js';
 
 const USAGE_KEY_PREFIX = 'hookrelay:usage';
 const ACTIVE_DEVELOPERS_KEY = `${USAGE_KEY_PREFIX}:active-developers`;
@@ -23,6 +23,11 @@ export interface UsageStats {
   limit: number;
   plan: Plan;
   resetDate: Date;
+}
+
+export interface DailyUsageStat {
+  date: string;
+  count: number;
 }
 
 function monthKey(date = new Date()): string {
@@ -113,6 +118,41 @@ export async function getUsage(developerId: string): Promise<UsageStats> {
     plan: developer.plan,
     resetDate: resetDate(),
   };
+}
+
+export async function getDailyUsage(developerId: string): Promise<DailyUsageStat[]> {
+  const today = new Date();
+  const todayStart = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
+  );
+  const startDate = new Date(todayStart);
+  startDate.setUTCDate(startDate.getUTCDate() - 29);
+  const endDate = new Date(todayStart);
+  endDate.setUTCDate(endDate.getUTCDate() + 1);
+
+  const counts = await WebhookEvent.aggregate<{ _id: string; count: number }>([
+    { $match: { developerId, createdAt: { $gte: startDate, $lt: endDate } } },
+    {
+      $group: {
+        _id: {
+          $dateToString: {
+            format: '%Y-%m-%d',
+            date: '$createdAt',
+            timezone: 'UTC',
+          },
+        },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+  const countByDate = new Map(counts.map(({ _id, count }) => [_id, count]));
+
+  return Array.from({ length: 30 }, (_, index) => {
+    const date = new Date(startDate);
+    date.setUTCDate(startDate.getUTCDate() + index);
+    const dateKey = date.toISOString().slice(0, 10);
+    return { date: dateKey, count: countByDate.get(dateKey) ?? 0 };
+  });
 }
 
 export async function isWithinLimit(developerId: string): Promise<boolean> {
