@@ -11,8 +11,12 @@
     "dev:api": "npm run dev --workspace=@hookrelay/api",
     "dev:dashboard": "npm run dev --workspace=@hookrelay/dashboard",
     "build:all": "npm run build --workspaces --if-present",
-    "lint:all": "eslint \"{apps,packages}/**/*.{ts,tsx}\" --max-warnings=0",
-    "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,json,md}\"",
+    "lint:all": "eslint \"{apps,packages,scripts,tests}/**/*.{ts,tsx}\" --max-warnings=0",
+    "test": "npm run test --workspace=@hookrelay/api",
+    "seed": "npm run build --workspace=@hookrelay/shared && npm exec --workspace=@hookrelay/api -- tsx ../../scripts/seed.ts",
+    "demo:server": "npm exec --workspace=@hookrelay/api -- tsx ../../scripts/demo-server.ts",
+    "demo:send": "npm exec --workspace=@hookrelay/api -- tsx ../../scripts/demo-send.ts",
+    "format": "prettier --write \"{apps,packages,scripts}/**/*.{ts,tsx,json,md}\"",
     "typecheck": "tsc -b --pretty"
   },
   "devDependencies": {

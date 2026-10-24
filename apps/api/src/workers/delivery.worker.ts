@@ -18,9 +18,11 @@ import { moveToDeadLetter } from '../queues/dead-letter.queue.js';
 import { buildSignatureHeader, signPayload } from '../utils/signing.js';
 import { resolveSafeTarget } from '../utils/ssrf-protection.js';
 import { sanitizeHeaderRecord } from '../middleware/security.js';
+import { createLogger } from '../utils/logger.js';
 
 const DELIVERY_TIMEOUT_MS = 30_000;
 const MAX_RESPONSE_BODY_BYTES = 100 * 1024;
+const logger = createLogger('delivery-worker');
 
 interface HttpResponseResult {
   statusCode: number;
@@ -166,16 +168,16 @@ async function deliver(
   ).select('+signingSecret');
 
   if (!event) {
-    console.info(
-      JSON.stringify({
-        level: 'info',
-        message: 'Skipping missing, cancelled, or stale delivery job',
+    logger.info(
+      {
         eventId: jobData.eventId,
+        developerId: jobData.developerId,
         attemptNumber: jobData.attemptNumber,
         targetUrl: jobData.targetUrl,
         status: 'skipped',
         responseTimeMs: 0,
-      }),
+      },
+      'Skipping missing, cancelled, or stale delivery job',
     );
     return null;
   }
@@ -228,7 +230,10 @@ async function deliver(
   }
 }
 
-export async function processWebhookJob(data: WebhookJobData): Promise<void> {
+export async function processWebhookJob(
+  data: WebhookJobData,
+  retryDelay = getRetryDelayMs,
+): Promise<void> {
   const startedAt = performance.now();
   let result: DeliveryResult | null = null;
   let processingError: string | null = null;
@@ -264,19 +269,19 @@ export async function processWebhookJob(data: WebhookJobData): Promise<void> {
       error: result.error,
     });
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        level: 'error',
-        message: 'Failed to record delivery attempt',
+    logger.error(
+      {
+        err: error,
         eventId: data.eventId,
+        developerId: data.developerId,
         attemptNumber: currentAttempt,
         targetUrl: data.targetUrl,
         status: 'attempt_record_failed',
         responseTimeMs: result.responseTimeMs,
-        error: error instanceof Error ? error.message : String(error),
-      }),
+      },
+      'Failed to record delivery attempt',
     );
-    return;
+    throw error;
   }
 
   try {
@@ -293,7 +298,7 @@ export async function processWebhookJob(data: WebhookJobData): Promise<void> {
       );
     } else if (data.attemptNumber < data.maxRetries) {
       const nextAttempt = data.attemptNumber + 1;
-      const delayMs = getRetryDelayMs(nextAttempt) ?? 0;
+      const delayMs = retryDelay(nextAttempt) ?? 0;
       await WebhookEvent.updateOne(
         { id: data.eventId, developerId: data.developerId, status: DeliveryStatus.DELIVERING },
         {
@@ -305,10 +310,13 @@ export async function processWebhookJob(data: WebhookJobData): Promise<void> {
         },
       );
       try {
-        await addWebhookJob({
-          ...data,
-          attemptNumber: nextAttempt,
-        });
+        await addWebhookJob(
+          {
+            ...data,
+            attemptNumber: nextAttempt,
+          },
+          delayMs,
+        );
       } catch (error) {
         await WebhookEvent.updateOne(
           { id: data.eventId, developerId: data.developerId, status: DeliveryStatus.PENDING },
@@ -331,44 +339,85 @@ export async function processWebhookJob(data: WebhookJobData): Promise<void> {
     }
   } catch (error) {
     processingError = error instanceof Error ? error.message : String(error);
-    console.error(
-      JSON.stringify({
-        level: 'error',
-        message: 'Failed to finalize delivery job',
+    logger.error(
+      {
+        err: error,
         eventId: data.eventId,
+        developerId: data.developerId,
         attemptNumber: currentAttempt,
         targetUrl: data.targetUrl,
         status: 'processing_error',
         responseTimeMs: result.responseTimeMs,
-        error: processingError,
-      }),
+      },
+      'Failed to finalize delivery job',
     );
   }
 
-  console.info(
-    JSON.stringify({
-      level: result.success ? 'info' : 'warn',
-      message: result.success ? 'Webhook delivered' : 'Webhook delivery attempt failed',
-      eventId: data.eventId,
-      attemptNumber: currentAttempt,
-      targetUrl: data.targetUrl,
-      status: result.success
-        ? DeliveryStatus.SUCCESS
-        : data.attemptNumber < data.maxRetries
-          ? DeliveryStatus.PENDING
-          : DeliveryStatus.DEAD_LETTER,
-      statusCode: result.statusCode,
-      responseTimeMs: result.responseTimeMs,
-      error: processingError ?? result.error,
-    }),
-  );
+  const logFields = {
+    eventId: data.eventId,
+    developerId: data.developerId,
+    attemptNumber: currentAttempt,
+    targetUrl: data.targetUrl,
+    method: data.httpMethod,
+    status: result.success
+      ? DeliveryStatus.SUCCESS
+      : data.attemptNumber < data.maxRetries
+        ? DeliveryStatus.PENDING
+        : DeliveryStatus.DEAD_LETTER,
+    statusCode: result.statusCode,
+    responseTimeMs: result.responseTimeMs,
+    error: processingError ?? result.error,
+  };
+  if (result.success) {
+    logger.info(logFields, 'Webhook delivered');
+  } else {
+    logger.warn(logFields, 'Webhook delivery attempt failed');
+  }
 }
 
-export function createDeliveryWorker(): Worker<WebhookJobData, void, string> {
+export function createDeliveryWorker(
+  retryDelay = getRetryDelayMs,
+): Worker<WebhookJobData, void, string> {
   const config = loadConfig();
   return new Worker<WebhookJobData, void, string>(
     QUEUE_NAMES.delivery,
-    (job) => processWebhookJob(job.data),
+    async (job) => {
+      try {
+        await processWebhookJob(job.data, retryDelay);
+      } catch (error) {
+        logger.error(
+          {
+            err: error,
+            eventId: job.data.eventId,
+            developerId: job.data.developerId,
+            attemptNumber: job.data.attemptNumber + 1,
+            targetUrl: job.data.targetUrl,
+            method: job.data.httpMethod,
+          },
+          'Unexpected error while processing delivery job',
+        );
+        try {
+          await WebhookEvent.updateOne(
+            {
+              id: job.data.eventId,
+              developerId: job.data.developerId,
+              status: DeliveryStatus.DELIVERING,
+            },
+            { $set: { status: DeliveryStatus.FAILED, nextRetryAt: null } },
+          );
+        } catch (stateError) {
+          logger.error(
+            {
+              err: stateError,
+              eventId: job.data.eventId,
+              developerId: job.data.developerId,
+            },
+            'Failed to mark an interrupted delivery as failed',
+          );
+        }
+        throw error;
+      }
+    },
     {
       connection: getRedisConnection(),
       concurrency: config.workerConcurrency,

@@ -2,17 +2,20 @@ import { Worker, type Job } from 'bullmq';
 import { QUEUE_NAMES } from '@hookrelay/shared';
 import { getRedisConnection } from '../config/redis.js';
 import type { DeadLetterJobData } from '../queues/dead-letter.queue.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('dead-letter-worker');
 
 async function processDeadLetterJob(job: Job<DeadLetterJobData>): Promise<void> {
-  console.info(
-    JSON.stringify({
-      level: 'warn',
-      message: 'Webhook moved to dead-letter queue',
+  logger.warn(
+    {
       eventId: job.data.eventId,
+      jobId: job.id,
       status: 'dead_letter',
       error: job.data.lastError,
       failedAt: job.data.failedAt,
-    }),
+    },
+    'Webhook moved to dead-letter queue',
   );
 }
 

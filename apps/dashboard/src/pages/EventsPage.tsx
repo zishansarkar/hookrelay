@@ -8,6 +8,8 @@ import {
 } from '../components/events/EventsFilter.js';
 import { EventsTable } from '../components/events/EventsTable.js';
 import { Button } from '../components/ui/Button.js';
+import { ErrorState } from '../components/ui/ErrorState.js';
+import { Skeleton } from '../components/ui/Skeleton.js';
 import { useEvents, useEventStats } from '../hooks/useEvents.js';
 
 const PAGE_SIZE = 20;
@@ -29,7 +31,7 @@ function StatCard({ label, value, icon: Icon, color, isLoading }: StatCardProps)
       <div className="min-w-0">
         <p className="truncate text-xs text-gray-500">{label}</p>
         {isLoading ? (
-          <div className="mt-1.5 h-5 w-10 animate-pulse rounded bg-gray-800" />
+          <Skeleton className="mt-1.5 h-5 w-10" />
         ) : (
           <p className="mt-0.5 text-lg font-semibold tabular-nums text-white">
             {(value ?? 0).toLocaleString()}
@@ -159,6 +161,14 @@ export function EventsPage() {
           isLoading={statsQuery.isLoading}
         />
       </section>
+      {statsQuery.isError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-200" role="status">
+          <span>Event statistics are temporarily unavailable.</span>
+          <Button variant="ghost" size="sm" onClick={() => void statsQuery.refetch()}>
+            Retry stats
+          </Button>
+        </div>
+      )}
 
       <EventsFilter
         status={status}
@@ -173,19 +183,11 @@ export function EventsPage() {
       />
 
       {eventsQuery.isError ? (
-        <div
-          role="alert"
-          className="flex flex-col items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-8 text-center"
-        >
-          <AlertCircle className="size-6 text-red-400" />
-          <div>
-            <p className="text-sm font-medium text-gray-200">Could not load events</p>
-            <p className="mt-1 text-xs text-gray-500">Check your connection and try again.</p>
-          </div>
-          <Button variant="secondary" size="sm" onClick={() => void eventsQuery.refetch()}>
-            Try again
-          </Button>
-        </div>
+        <ErrorState
+          title="Could not load events"
+          message="Check your connection and try again."
+          onRetry={() => void eventsQuery.refetch()}
+        />
       ) : (
         <EventsTable
           events={data?.events ?? []}

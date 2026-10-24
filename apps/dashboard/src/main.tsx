@@ -5,12 +5,17 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.js';
 import { AuthProvider } from './contexts/AuthContext.js';
 import { ToastProvider } from './contexts/ToastContext.js';
+import { RouteErrorBoundary } from './components/ui/RouteErrorBoundary.js';
 import './index.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      retry: (failureCount, error) => {
+        if (failureCount >= 2) return false;
+        return !('response' in error) || Boolean(error.response === undefined);
+      },
+      retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
       refetchOnWindowFocus: false,
     },
   },
@@ -22,7 +27,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <ToastProvider>
           <AuthProvider>
-            <App />
+            <RouteErrorBoundary>
+              <App />
+            </RouteErrorBoundary>
           </AuthProvider>
         </ToastProvider>
       </BrowserRouter>

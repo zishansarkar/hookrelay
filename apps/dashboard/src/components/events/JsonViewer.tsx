@@ -8,11 +8,11 @@ interface JsonViewerProps {
 }
 
 function Value({ value }: { value: unknown }) {
-  if (value === null) return <span className="text-gray-500">null</span>;
-  if (typeof value === 'string') return <span className="text-green-300">"{value}"</span>;
-  if (typeof value === 'number') return <span className="text-blue-300">{value}</span>;
-  if (typeof value === 'boolean') return <span className="text-amber-300">{String(value)}</span>;
-  return <span className="text-gray-400">{String(value)}</span>;
+  if (value === null)   return <span className="break-all text-gray-500">null</span>;
+  if (typeof value === 'string') return <span className="break-all text-green-300">"{value}"</span>;
+  if (typeof value === 'number') return <span className="break-all text-blue-300">{value}</span>;
+  if (typeof value === 'boolean') return <span className="break-all text-amber-300">{String(value)}</span>;
+  return <span className="break-all text-gray-400">{String(value)}</span>;
 }
 
 function JsonNode({
@@ -80,7 +80,7 @@ function JsonNode({
                 <span className="w-10 shrink-0 select-none pr-3 text-right text-gray-700">
                   {line.current++}
                 </span>
-                {!isArray && <span className="text-gray-200">"{key}"</span>}
+                {!isArray && <span className="break-all text-gray-200">"{key}"</span>}
                 {!isArray && <span className="mr-2 text-gray-500">:</span>}
                 {childIsContainer ? (
                   <JsonNode
@@ -148,7 +148,7 @@ export function JsonViewer({ value, className = '' }: JsonViewerProps) {
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
-      <pre className="max-h-[32rem] overflow-auto py-3 font-mono text-xs leading-6">
+      <pre className="max-h-[32rem] overflow-auto py-3 font-mono text-xs leading-6 [overflow-wrap:anywhere]">
         <JsonNode
           value={value}
           path="$"

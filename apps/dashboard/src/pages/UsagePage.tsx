@@ -1,20 +1,16 @@
-import { AlertCircle, Check, Zap } from 'lucide-react';
+import { Check, Zap } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { PLAN_LIMITS, type Plan } from '@hookrelay/shared';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { useState } from 'react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Badge } from '../components/ui/Badge.js';
 import { Button } from '../components/ui/Button.js';
 import { Card } from '../components/ui/Card.js';
-import { Spinner } from '../components/ui/Spinner.js';
+import { ErrorState } from '../components/ui/ErrorState.js';
+import { Skeleton } from '../components/ui/Skeleton.js';
 import { useDailyUsage, useUsage } from '../hooks/useUsage.js';
+import { billingApi } from '../lib/api.js';
+import { useToast } from '../contexts/ToastContext.js';
 
 const planOrder: Plan[] = ['free', 'pro', 'team'];
 const planNames: Record<Plan, string> = { free: 'Free', pro: 'Pro', team: 'Team' };
@@ -58,11 +54,42 @@ function ChartTooltip({
 export function UsagePage() {
   const usageQuery = useUsage();
   const dailyQuery = useDailyUsage();
+  const { toast } = useToast();
+  const [checkoutPlan, setCheckoutPlan] = useState<'pro' | 'team' | null>(null);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const usage = usageQuery.data;
   const progress = usage ? (usage.limit > 0 ? (usage.used / usage.limit) * 100 : 0) : 0;
   const progressColor =
     progress >= 80 ? 'bg-red-500' : progress >= 50 ? 'bg-amber-400' : 'bg-green-500';
   const resetDate = usage ? new Date(usage.resetDate) : null;
+
+  const redirectToStripe = (url: string) => {
+    const stripeUrl = new URL(url);
+    if (stripeUrl.protocol !== 'https:' || !stripeUrl.hostname.endsWith('.stripe.com')) {
+      throw new Error('Billing returned an unexpected destination.');
+    }
+    window.location.assign(stripeUrl.toString());
+  };
+
+  const startCheckout = async (plan: 'pro' | 'team') => {
+    setCheckoutPlan(plan);
+    try {
+      redirectToStripe(await billingApi.createCheckoutSession(plan));
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Could not start checkout.', 'error');
+      setCheckoutPlan(null);
+    }
+  };
+
+  const openPortal = async () => {
+    setIsOpeningPortal(true);
+    try {
+      redirectToStripe(await billingApi.createPortalSession());
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Could not open billing settings.', 'error');
+      setIsOpeningPortal(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -72,31 +99,35 @@ export function UsagePage() {
             Billing &amp; limits
           </p>
           <h1 className="text-2xl font-semibold tracking-tight text-white">Usage</h1>
-          <p className="mt-1.5 text-sm text-gray-500">
-            Track webhook volume and manage your plan.
-          </p>
+          <p className="mt-1.5 text-sm text-gray-500">Track webhook volume and manage your plan.</p>
         </div>
         {usage && (
-          <Badge variant="info" className="self-start text-sm">
-            {planNames[usage.plan]} plan
-          </Badge>
+          <div className="flex items-center gap-3 self-start">
+            <Badge variant="info" className="text-sm">
+              {planNames[usage.plan]} plan
+            </Badge>
+            {usage.plan !== 'free' && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void openPortal()}
+                loading={isOpeningPortal}
+              >
+                Manage Subscription
+              </Button>
+            )}
+          </div>
         )}
       </header>
 
       {usageQuery.isLoading ? (
-        <Card className="flex min-h-52 items-center justify-center">
-          <Spinner className="size-6 text-blue-400" />
-        </Card>
+        <Skeleton variant="card" className="h-52" />
       ) : usageQuery.isError || !usage ? (
-        <Card className="flex flex-col items-center gap-3 py-10 text-center">
-          <AlertCircle className="size-6 text-red-400" />
-          <p role="alert" className="text-sm text-red-300">
-            Could not load your usage. Please refresh the page to try again.
-          </p>
-          <Button variant="secondary" size="sm" onClick={() => void usageQuery.refetch()}>
-            Try again
-          </Button>
-        </Card>
+        <ErrorState
+          title="Could not load usage"
+          message="Please try again."
+          onRetry={() => void usageQuery.refetch()}
+        />
       ) : (
         <Card className="space-y-5">
           <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
@@ -148,16 +179,14 @@ export function UsagePage() {
         </div>
         <Card className="min-h-80">
           {dailyQuery.isLoading ? (
-            <div className="flex h-72 items-center justify-center">
-              <Spinner className="size-6 text-blue-400" />
-            </div>
+            <Skeleton variant="card" className="h-72 border-0" />
           ) : dailyQuery.isError ? (
-            <div className="flex h-72 flex-col items-center justify-center gap-3 text-center">
-              <AlertCircle className="size-6 text-red-400" />
-              <p role="alert" className="text-sm text-red-300">Could not load daily usage data.</p>
-              <Button variant="secondary" size="sm" onClick={() => void dailyQuery.refetch()}>
-                Try again
-              </Button>
+            <div className="flex h-72 items-center">
+              <ErrorState
+                title="Could not load daily usage"
+                message="Try again to refresh the chart."
+                onRetry={() => void dailyQuery.refetch()}
+              />
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
@@ -244,13 +273,22 @@ export function UsagePage() {
                   <Button variant="secondary" disabled>
                     Current plan
                   </Button>
+                ) : plan !== 'free' &&
+                  (usage?.plan === 'free' || (usage?.plan === 'pro' && plan === 'team')) ? (
+                  <Button
+                    onClick={() => void startCheckout(plan)}
+                    loading={checkoutPlan === plan}
+                    disabled={checkoutPlan !== null || isOpeningPortal}
+                  >
+                    <Zap className="size-4" /> Upgrade to {planNames[plan]}
+                  </Button>
                 ) : (
                   <Button
                     variant="secondary"
                     disabled
-                    title="Plan upgrades will be available in a future release."
+                    title="Downgrades are managed through the billing portal."
                   >
-                    <Zap className="size-4" /> Upgrade
+                    Downgrade
                   </Button>
                 )}
               </Card>

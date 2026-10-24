@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
 import type { ZodType } from 'zod';
-import type { ApiErrorResponse } from '@hookrelay/shared';
+import { ValidationError } from '../utils/errors.js';
 
 /**
  * Builds a middleware that validates `req.body` against a Zod schema.
@@ -9,20 +9,11 @@ import type { ApiErrorResponse } from '@hookrelay/shared';
  * responds with 400 and the individual field errors.
  */
 export function validate<TOutput>(schema: ZodType<TOutput>): RequestHandler {
-  return (req, res, next) => {
+  return (req, _res, next) => {
     const result = schema.safeParse(req.body);
 
     if (!result.success) {
-      const body: ApiErrorResponse = {
-        error: 'Validation failed',
-        code: 'VALIDATION_ERROR',
-        details: result.error.issues.map((issue) => ({
-          field: issue.path.map(String).join('.') || 'body',
-          message: issue.message,
-        })),
-      };
-
-      res.status(400).json(body);
+      next(new ValidationError('Request validation failed', { cause: result.error }));
       return;
     }
 

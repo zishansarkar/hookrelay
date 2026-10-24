@@ -1,46 +1,9 @@
-import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import dotenv from 'dotenv';
+import { environmentFile } from './loadEnvironmentFile.js';
+import { createLogger } from '../utils/logger.js';
 
-const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
-
-/** How many parent directories are searched for a `.env` file. */
-const ENV_SEARCH_DEPTH = 6;
-
-/**
- * Finds the `.env` file by walking up from this module's directory.
- *
- * The lookup is anchored to the module (not the working directory) so the
- * file is found no matter where the process was started from — `npm run
- * dev:api` runs with `apps/api` as the working directory — and whether the
- * code runs from `src/` or from the compiled `dist/`.
- */
-function findEnvFile(): string | undefined {
-  let directory = MODULE_DIRECTORY;
-
-  for (let depth = 0; depth < ENV_SEARCH_DEPTH; depth += 1) {
-    const candidate = resolve(directory, '.env');
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-
-    const parent = dirname(directory);
-    if (parent === directory) {
-      break;
-    }
-    directory = parent;
-  }
-
-  return undefined;
-}
-
-const envFile = findEnvFile();
-if (envFile) {
-  dotenv.config({ path: envFile, quiet: true });
-  if (process.env.NODE_ENV !== 'production') {
-    console.info(`[hookrelay-api] loaded environment from ${envFile}`);
-  }
+const logger = createLogger('environment');
+if (environmentFile && process.env.NODE_ENV !== 'production') {
+  logger.info({ envFile: environmentFile }, 'Loaded environment configuration');
 }
 
 const NODE_ENVS = ['development', 'test', 'production'] as const;
@@ -77,6 +40,8 @@ export interface AppConfig {
   frontendUrl: string;
   stripeSecretKey: string | null;
   stripeWebhookSecret: string | null;
+  stripeProPriceId: string | null;
+  stripeTeamPriceId: string | null;
 }
 
 function isNodeEnv(value: string): value is NodeEnv {
@@ -153,6 +118,8 @@ export function validateEnvironment(env: NodeJS.ProcessEnv = process.env): AppCo
     frontendUrl: env.FRONTEND_URL?.trim() || DEFAULT_FRONTEND_URL,
     stripeSecretKey: readOptional(env, 'STRIPE_SECRET_KEY'),
     stripeWebhookSecret: readOptional(env, 'STRIPE_WEBHOOK_SECRET'),
+    stripeProPriceId: readOptional(env, 'STRIPE_PRO_PRICE_ID'),
+    stripeTeamPriceId: readOptional(env, 'STRIPE_TEAM_PRICE_ID'),
   };
 }
 

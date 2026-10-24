@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 import { loadConfig } from './environment.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('database');
 
 /** Number of connection attempts before giving up. */
 export const MAX_CONNECTION_ATTEMPTS = 3;
@@ -30,11 +33,13 @@ export async function connectDatabase(): Promise<typeof mongoose> {
 
   mongoose.set('strict', true);
   if (config.nodeEnv === 'development') {
-    mongoose.set('debug', true);
+    mongoose.set('debug', (collectionName, methodName) => {
+      logger.debug({ collectionName, methodName }, 'MongoDB query');
+    });
   }
 
   mongoose.connection.on('error', (error: unknown) => {
-    console.error('[hookrelay-api] MongoDB connection error:', describeError(error));
+    logger.error({ err: error }, 'MongoDB connection error');
   });
 
   let lastError: unknown;
@@ -44,12 +49,13 @@ export async function connectDatabase(): Promise<typeof mongoose> {
       await mongoose.connect(config.databaseUrl, {
         serverSelectionTimeoutMS: SERVER_SELECTION_TIMEOUT_MS,
       });
-      console.info(`[hookrelay-api] MongoDB connected (attempt ${attempt})`);
+      logger.info({ attempt }, 'MongoDB connected');
       return mongoose;
     } catch (error) {
       lastError = error;
-      console.error(
-        `[hookrelay-api] MongoDB connection attempt ${attempt}/${MAX_CONNECTION_ATTEMPTS} failed: ${describeError(error)}`,
+      logger.error(
+        { err: error, attempt, maxAttempts: MAX_CONNECTION_ATTEMPTS },
+        'MongoDB connection attempt failed',
       );
       if (attempt < MAX_CONNECTION_ATTEMPTS) {
         await delay(RETRY_DELAY_MS);

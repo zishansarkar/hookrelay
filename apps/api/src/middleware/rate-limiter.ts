@@ -26,3 +26,21 @@ export const globalRateLimiter: RequestHandler = rateLimit({
     res.status(429).json(body);
   },
 });
+
+/**
+ * IP-level guard before API-key authentication so invalid-key traffic cannot
+ * bypass rate limiting by never reaching the per-key limiter.
+ */
+export const webhookIngestionIpRateLimiter: RequestHandler = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  limit: 1_000,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    const body: ApiErrorResponse = {
+      error: 'Too many webhook requests from this IP',
+      code: 'RATE_LIMITED',
+    };
+    res.status(429).json(body);
+  },
+});

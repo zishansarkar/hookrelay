@@ -5,6 +5,9 @@ import { loadConfig } from './config/environment.js';
 import { closeRedisConnection, verifyRedisConnection } from './config/redis.js';
 import { startWorkers, type HookRelayWorkers } from './workers/index.js';
 import { startUsageSyncJob, stopUsageSyncJob } from './jobs/usage-sync.job.js';
+import { createLogger } from './utils/logger.js';
+
+const logger = createLogger('server');
 
 /** How long a graceful shutdown may take before connections are force-closed. */
 const SHUTDOWN_TIMEOUT_MS = 40_000;
@@ -22,10 +25,10 @@ function registerShutdownHandlers(server: Server, workers: HookRelayWorkers): vo
     }
     isShuttingDown = true;
 
-    console.info(`[hookrelay-api] ${signal} received — shutting down gracefully`);
+    logger.info({ signal }, 'Shutting down gracefully');
 
     const forceExit = setTimeout(() => {
-      console.error('[hookrelay-api] graceful shutdown timed out — forcing exit');
+      logger.fatal({ timeoutMs: SHUTDOWN_TIMEOUT_MS }, 'Graceful shutdown timed out');
       server.closeAllConnections();
       process.exit(1);
     }, SHUTDOWN_TIMEOUT_MS);
@@ -33,28 +36,28 @@ function registerShutdownHandlers(server: Server, workers: HookRelayWorkers): vo
 
     server.close((closeError) => {
       if (closeError) {
-        console.error('[hookrelay-api] failed to close the HTTP server:', closeError);
+        logger.error({ err: closeError }, 'Failed to close the HTTP server');
       }
 
       void (async () => {
         try {
           await workers.close();
         } catch (workerError: unknown) {
-          console.error('[hookrelay-api] failed to close workers:', workerError);
+          logger.error({ err: workerError }, 'Failed to close workers');
         }
 
         try {
           await stopUsageSyncJob();
         } catch (usageError: unknown) {
-          console.error('[hookrelay-api] failed to stop the usage sync job:', usageError);
+          logger.error({ err: usageError }, 'Failed to stop usage sync job');
         }
 
         await Promise.allSettled([
           disconnectDatabase().catch((databaseError: unknown) => {
-            console.error('[hookrelay-api] failed to close the MongoDB connection:', databaseError);
+            logger.error({ err: databaseError }, 'Failed to close MongoDB connection');
           }),
           closeRedisConnection().catch((redisError: unknown) => {
-            console.error('[hookrelay-api] failed to close the Redis connection:', redisError);
+            logger.error({ err: redisError }, 'Failed to close Redis connection');
           }),
         ]);
         clearTimeout(forceExit);
@@ -67,6 +70,14 @@ function registerShutdownHandlers(server: Server, workers: HookRelayWorkers): vo
 
   process.once('SIGTERM', () => shutdown('SIGTERM'));
   process.once('SIGINT', () => shutdown('SIGINT'));
+  process.on('unhandledRejection', (reason: unknown) => {
+    logger.fatal({ err: reason }, 'Unhandled promise rejection; initiating shutdown');
+    shutdown('SIGTERM');
+  });
+  process.on('uncaughtException', (error: Error) => {
+    logger.fatal({ err: error }, 'Uncaught exception; initiating shutdown');
+    shutdown('SIGTERM');
+  });
 }
 
 async function main(): Promise<void> {
@@ -79,9 +90,9 @@ async function main(): Promise<void> {
   startUsageSyncJob();
   const app = createApp(config);
   const server = app.listen(config.port, () => {
-    console.info(
-      `[hookrelay-api] listening on http://localhost:${config.port} ` +
-        `(environment: ${config.nodeEnv}, node: ${process.version})`,
+    logger.info(
+      { port: config.port, nodeVersion: process.version, environment: config.nodeEnv },
+      'HTTP server listening',
     );
   });
 
@@ -89,6 +100,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error('[hookrelay-api] failed to start:', error instanceof Error ? error.message : error);
+  logger.fatal({ err: error }, 'Failed to start API server');
   process.exitCode = 1;
 });

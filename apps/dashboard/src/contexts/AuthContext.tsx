@@ -16,6 +16,7 @@ interface AuthContextValue {
   isLoading: boolean;
   login(email: string, password: string): Promise<void>;
   register(email: string, password: string, companyName?: string): Promise<void>;
+  refreshDeveloper(): Promise<Developer>;
   logout(): void;
 }
 
@@ -62,6 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setDeveloper(result.developer);
   }, []);
 
+  const refreshDeveloper = useCallback(async () => {
+    const currentDeveloper = await authApi.getMe();
+    setDeveloper(currentDeveloper);
+    return currentDeveloper;
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('hookrelay_token');
     setDeveloper(null);
@@ -74,9 +81,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login,
       register,
+      refreshDeveloper,
       logout,
     }),
-    [developer, isLoading, login, register, logout],
+    [developer, isLoading, login, register, refreshDeveloper, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

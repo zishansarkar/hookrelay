@@ -64,6 +64,8 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+let lastConnectionToastAt = 0;
+
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('hookrelay_token');
   if (token) {
@@ -75,6 +77,13 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
+    if (!error.response) {
+      const now = Date.now();
+      if (now - lastConnectionToastAt > 5_000) {
+        lastConnectionToastAt = now;
+        window.dispatchEvent(new Event('hookrelay:connection-lost'));
+      }
+    }
     if (error.response?.status === 401) {
       localStorage.removeItem('hookrelay_token');
       if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
@@ -166,5 +175,16 @@ export const usageApi = {
       apiClient.get('/v1/usage/daily'),
     );
     return result.dailyUsage;
+  },
+};
+
+export const billingApi = {
+  async createCheckoutSession(plan: 'pro' | 'team'): Promise<string> {
+    const result = await getData<{ url: string }>(apiClient.post('/v1/billing/checkout', { plan }));
+    return result.url;
+  },
+  async createPortalSession(): Promise<string> {
+    const result = await getData<{ url: string }>(apiClient.post('/v1/billing/portal'));
+    return result.url;
   },
 };

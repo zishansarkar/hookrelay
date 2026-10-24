@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: hookrelay-api
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: '10000'
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: hookrelay-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: HMAC_DEFAULT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRO_PRICE_ID
+        sync: false
+      - key: STRIPE_TEAM_PRICE_ID
+        sync: false
+
+  - type: redis
+    name: hookrelay-redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: noeviction

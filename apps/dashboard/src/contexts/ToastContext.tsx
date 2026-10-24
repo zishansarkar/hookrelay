@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useEffect,
   useState,
   type ReactNode,
 } from 'react';
@@ -39,8 +40,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setItems((current) => [...current, { id, message, kind }]);
     window.setTimeout(() => {
       setItems((current) => current.filter((item) => item.id !== id));
-    }, 4500);
+    }, 5000);
   }, []);
+  useEffect(() => {
+    const handleConnectionLost = () => toast('Connection lost. Retrying…', 'warning');
+    window.addEventListener('hookrelay:connection-lost', handleConnectionLost);
+    return () => window.removeEventListener('hookrelay:connection-lost', handleConnectionLost);
+  }, [toast]);
   const value = useMemo(() => ({ toast }), [toast]);
 
   return (
@@ -54,7 +60,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               key={item.id}
               role="status"
               className={clsx(
-                'pointer-events-auto flex items-start gap-3 rounded-xl border bg-[#111827] p-4 shadow-2xl',
+                'pointer-events-auto animate-toast-in flex items-start gap-3 rounded-xl border bg-[#111827] p-4 shadow-2xl',
                 item.kind === 'success' && 'border-green-500/30',
                 item.kind === 'error' && 'border-red-500/30',
                 item.kind === 'warning' && 'border-amber-500/30',
@@ -75,7 +81,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 type="button"
                 aria-label="Dismiss notification"
                 onClick={() => dismiss(item.id)}
-                className="rounded p-0.5 text-gray-500 hover:text-gray-200"
+                className="rounded p-0.5 text-gray-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               >
                 <X className="size-4" />
               </button>

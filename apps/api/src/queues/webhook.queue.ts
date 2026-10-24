@@ -1,12 +1,17 @@
 import { Queue, type Job } from 'bullmq';
 import { QUEUE_NAMES, RETRY_SCHEDULE_MS } from '@hookrelay/shared';
 import { getRedisConnection } from '../config/redis.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('delivery-queue');
 
 /** Completed jobs are kept for 7 days… */
 const COMPLETED_JOB_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 /** …or until 1000 of them are stored, whichever comes first. */
 const COMPLETED_JOB_MAX_COUNT = 1_000;
+const FAILED_JOB_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+const FAILED_JOB_MAX_COUNT = 10_000;
 
 /** Name of every delivery job added to the queue. */
 export const WEBHOOK_JOB_NAME = 'deliver';
@@ -35,8 +40,8 @@ export type WebhookJob = Job<WebhookJobData, void, string>;
 /**
  * Queue of webhook deliveries.
  *
- * Failed jobs are deliberately kept (`removeOnFail: false`) so they can be
- * inspected and moved to the dead-letter queue.
+ * Failed event details are persisted in MongoDB and the dead-letter queue;
+ * failed BullMQ job records are retained temporarily for operational debugging.
  */
 export const webhookQueue = new Queue<WebhookJobData, void>(QUEUE_NAMES.delivery, {
   connection: getRedisConnection(),
@@ -45,12 +50,15 @@ export const webhookQueue = new Queue<WebhookJobData, void>(QUEUE_NAMES.delivery
       age: COMPLETED_JOB_MAX_AGE_SECONDS,
       count: COMPLETED_JOB_MAX_COUNT,
     },
-    removeOnFail: false,
+    removeOnFail: {
+      age: FAILED_JOB_MAX_AGE_SECONDS,
+      count: FAILED_JOB_MAX_COUNT,
+    },
   },
 });
 
 webhookQueue.on('error', (error: Error) => {
-  console.error(`[hookrelay-api] queue "${QUEUE_NAMES.delivery}" error: ${error.message}`);
+  logger.error({ err: error, queue: QUEUE_NAMES.delivery }, 'Queue error');
 });
 
 /**
@@ -74,9 +82,12 @@ export function getRetryDelayMs(attemptNumber: number): number | undefined {
  * The job id is derived from the event and attempt number, so re-adding the
  * same attempt is idempotent instead of producing duplicates.
  */
-export async function addWebhookJob(data: WebhookJobData): Promise<WebhookJob> {
+export async function addWebhookJob(
+  data: WebhookJobData,
+  delayMs = getRetryDelayMs(data.attemptNumber),
+): Promise<WebhookJob> {
   return webhookQueue.add(WEBHOOK_JOB_NAME, data, {
     jobId: `${data.eventId}-attempt-${data.attemptNumber}${data.replayId ? `-replay-${data.replayId}` : ''}`,
-    delay: getRetryDelayMs(data.attemptNumber),
+    delay: delayMs,
   });
 }

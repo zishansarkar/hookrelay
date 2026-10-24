@@ -9,7 +9,8 @@ import { JsonViewer } from '../components/events/JsonViewer.js';
 import { Button } from '../components/ui/Button.js';
 import { Card } from '../components/ui/Card.js';
 import { Modal } from '../components/ui/Modal.js';
-import { Spinner } from '../components/ui/Spinner.js';
+import { ErrorState } from '../components/ui/ErrorState.js';
+import { PageSkeleton } from '../components/ui/Skeleton.js';
 import { useToast } from '../contexts/ToastContext.js';
 import { useEvent, useReplayEvent } from '../hooks/useEvent.js';
 import type { DeliveryAttempt } from '@hookrelay/shared';
@@ -108,7 +109,7 @@ function AttemptRequestHeaders({ attempts, fallback }: {
 
 export function EventDetailPage() {
   const { id = '' } = useParams();
-  const { data: event, isLoading, isError, error } = useEvent(id);
+  const { data: event, isLoading, isError, error, refetch } = useEvent(id);
   const replayMutation = useReplayEvent(id);
   const { toast } = useToast();
   const [requestTab, setRequestTab] = useState<RequestTab>('payload');
@@ -125,11 +126,7 @@ export function EventDetailPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-64 items-center justify-center">
-        <Spinner className="size-6 text-blue-400" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
   if (isError || !event) {
     return (
@@ -137,12 +134,11 @@ export function EventDetailPage() {
         <Link to="/events" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white">
           <ArrowLeft className="size-4" /> Events
         </Link>
-        <Card>
-          <h1 className="font-semibold text-white">Unable to load event</h1>
-          <p role="alert" className="mt-2 text-sm text-red-300">
-            {error instanceof Error ? error.message : 'The event could not be found.'}
-          </p>
-        </Card>
+        <ErrorState
+          title="Unable to load event"
+          message={error instanceof Error ? error.message : 'The event could not be found.'}
+          onRetry={() => void refetch()}
+        />
       </div>
     );
   }

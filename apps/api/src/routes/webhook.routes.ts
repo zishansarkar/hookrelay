@@ -6,6 +6,7 @@ import * as webhookService from '../services/webhook.service.js';
 import { createSendWebhookSchema } from '../validators/webhook.validators.js';
 import { loadConfig } from '../config/environment.js';
 import { sanitizeHeaders } from '../middleware/security.js';
+import { webhookIngestionIpRateLimiter } from '../middleware/rate-limiter.js';
 
 /**
  * Webhook ingestion routes.
@@ -17,6 +18,7 @@ export const webhookRoutes: Router = Router();
 
 webhookRoutes.post(
   '/send',
+  webhookIngestionIpRateLimiter,
   authenticateApiKey,
   apiKeyRateLimiter,
   sanitizeHeaders,

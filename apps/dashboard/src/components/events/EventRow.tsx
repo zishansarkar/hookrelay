@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Check, Copy, ExternalLink } from 'lucide-react';
+import { Check, Copy, ExternalLink, RotateCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import type { ListedWebhookEvent } from '../../lib/api.js';
+import { DeliveryStatus } from '@hookrelay/shared';
+import { useReplayEvent } from '../../hooks/useEvent.js';
+import { useToast } from '../../contexts/ToastContext.js';
+import { Spinner } from '../ui/Spinner.js';
 import { EventStatusBadge } from './EventStatusBadge.js';
 
 interface EventRowProps {
@@ -28,7 +32,10 @@ function responseTimeColor(responseTimeMs: number | null): string {
 export function EventRow({ event }: EventRowProps) {
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
   const createdAt = new Date(event.createdAt);
+  const replayMutation = useReplayEvent(event.id);
+  const { toast } = useToast();
 
   async function copyEventId(eventClick: React.MouseEvent<HTMLButtonElement>) {
     eventClick.stopPropagation();
@@ -38,6 +45,28 @@ export function EventRow({ event }: EventRowProps) {
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       setCopied(false);
+      toast('Could not copy the event ID.', 'error');
+    }
+  }
+
+  async function copyTargetUrl(eventClick: React.MouseEvent<HTMLButtonElement>) {
+    eventClick.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(event.targetUrl);
+      setUrlCopied(true);
+      window.setTimeout(() => setUrlCopied(false), 1500);
+    } catch {
+      toast('Could not copy the target URL.', 'error');
+    }
+  }
+
+  async function replay(eventClick: React.MouseEvent<HTMLButtonElement>) {
+    eventClick.stopPropagation();
+    try {
+      await replayMutation.mutateAsync();
+      toast('Event replayed successfully.', 'success');
+    } catch {
+      toast('Could not replay this event. Please try again.', 'error');
     }
   }
 
@@ -50,6 +79,7 @@ export function EventRow({ event }: EventRowProps) {
       tabIndex={0}
       onClick={openDetails}
       onKeyDown={(keyEvent) => {
+        if (keyEvent.target !== keyEvent.currentTarget) return;
         if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
           keyEvent.preventDefault();
           openDetails();
@@ -65,7 +95,7 @@ export function EventRow({ event }: EventRowProps) {
           type="button"
           onClick={copyEventId}
           title="Copy full event ID"
-          className="inline-flex max-w-36 items-center gap-1.5 rounded text-left font-mono text-xs text-gray-400 hover:text-blue-300"
+          className="inline-flex max-w-36 items-center gap-1.5 rounded text-left font-mono text-xs text-gray-400 hover:text-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
         >
           <span className="truncate">{event.id}</span>
           {copied ? (
@@ -80,6 +110,15 @@ export function EventRow({ event }: EventRowProps) {
           <span className="truncate text-sm text-gray-300" title={event.targetUrl}>
             {event.targetUrl}
           </span>
+          <button
+            type="button"
+            aria-label={urlCopied ? 'Target URL copied' : 'Copy target URL'}
+            title={urlCopied ? 'Copied' : 'Copy target URL'}
+            onClick={copyTargetUrl}
+            className="shrink-0 rounded p-1 text-gray-500 opacity-0 transition-opacity hover:text-blue-300 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 group-hover:opacity-100"
+          >
+            {urlCopied ? <Check className="size-3.5 text-green-400" /> : <Copy className="size-3.5" />}
+          </button>
           <ExternalLink className="size-3 shrink-0 text-gray-700" aria-hidden="true" />
         </span>
       </td>
@@ -108,9 +147,27 @@ export function EventRow({ event }: EventRowProps) {
         {event.attempts}/{event.maxRetries}
       </td>
       <td className="whitespace-nowrap px-4 py-3.5 text-xs text-gray-500">
-        <time dateTime={createdAt.toISOString()} title={format(createdAt, 'PPpp')}>
-          {formatDistanceToNow(createdAt, { addSuffix: true })}
-        </time>
+        <span className="flex items-center justify-between gap-3">
+          <time dateTime={createdAt.toISOString()} title={format(createdAt, 'PPpp')}>
+            {formatDistanceToNow(createdAt, { addSuffix: true })}
+          </time>
+          {(event.status === DeliveryStatus.FAILED || event.status === DeliveryStatus.DEAD_LETTER) && (
+            <button
+              type="button"
+              aria-label="Replay event"
+              title="Replay event"
+              disabled={replayMutation.isPending}
+              onClick={(clickEvent) => void replay(clickEvent)}
+              className="rounded-md p-1.5 text-gray-500 hover:bg-blue-500/10 hover:text-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50"
+            >
+              {replayMutation.isPending ? (
+                <Spinner className="size-3.5" />
+              ) : (
+                <RotateCw className="size-3.5" />
+              )}
+            </button>
+          )}
+        </span>
       </td>
     </tr>
   );

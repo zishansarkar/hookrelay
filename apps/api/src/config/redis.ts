@@ -1,7 +1,8 @@
 import { Redis, type RedisOptions } from 'ioredis';
 import { loadConfig } from './environment.js';
+import { createLogger } from '../utils/logger.js';
 
-const LOG_PREFIX = '[hookrelay-api] redis';
+const logger = createLogger('redis');
 
 /** How long startup waits for Redis before declaring it unreachable. */
 const VERIFY_TIMEOUT_MS = 10_000;
@@ -44,16 +45,16 @@ export function createRedisConnection(connectionName = 'hookrelay-api'): Redis {
   const connection = new Redis(redisUrl, options);
 
   connection.on('connect', () => {
-    console.info(`${LOG_PREFIX} connecting to ${describeUrl(redisUrl)}`);
+    logger.info({ redisUrl: describeUrl(redisUrl) }, 'Connecting to Redis');
   });
   connection.on('ready', () => {
-    console.info(`${LOG_PREFIX} ready (tls: ${usesTls})`);
+    logger.info({ tls: usesTls }, 'Redis ready');
   });
   connection.on('error', (error: Error) => {
-    console.error(`${LOG_PREFIX} connection error: ${error.message}`);
+    logger.error({ err: error }, 'Redis connection error');
   });
   connection.on('close', () => {
-    console.info(`${LOG_PREFIX} connection closed`);
+    logger.info('Redis connection closed');
   });
 
   return connection;
@@ -126,7 +127,8 @@ export async function closeRedisConnection(): Promise<void> {
         }, QUIT_TIMEOUT_MS);
       }),
     ]);
-  } catch {
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to gracefully close Redis; disconnecting immediately');
     connection.disconnect();
   } finally {
     if (timer) {

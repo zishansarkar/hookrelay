@@ -2,6 +2,9 @@ import type { ApiKey as ApiKeyRecord, CreateApiKeyResponse, Plan } from '@hookre
 import { createHash } from 'node:crypto';
 import { HttpError } from '../errors/http-error.js';
 import { API_KEY_PREFIX, ApiKey, Developer, type ApiKeyHydratedDocument } from '../models/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('api-keys');
 
 /** Maximum number of active API keys per developer. */
 const MAX_ACTIVE_KEYS = 5;
@@ -94,7 +97,10 @@ export async function getByRawKey(rawKey: string): Promise<{
 
   // Usage tracking must never slow down ingestion, so it is not awaited.
   void ApiKey.updateOne({ _id: apiKey._id }, { lastUsedAt: new Date() }).catch((error: unknown) => {
-    console.error('[hookrelay-api] failed to record API key usage', error);
+    logger.error(
+      { err: error, apiKeyId: apiKey.id, developerId: apiKey.developerId },
+      'Failed to record API key usage',
+    );
   });
 
   return { apiKey, developer };

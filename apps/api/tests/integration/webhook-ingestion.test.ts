@@ -149,7 +149,7 @@ describe('POST /v1/webhooks/send', () => {
     expect(response.body.code).toBe('VALIDATION_ERROR');
   });
 
-  it('returns 400 when the JSON request exceeds the payload size limit', async () => {
+  it('returns 413 when the JSON request exceeds the payload size limit', async () => {
     await seedDeveloper();
     const largeJson = JSON.stringify({
       targetUrl: VALID_REQUEST_BODY.targetUrl,
@@ -162,7 +162,7 @@ describe('POST /v1/webhooks/send', () => {
       .set('content-type', 'application/json')
       .send(largeJson);
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(413);
     expect(response.body.code).toBe('PAYLOAD_TOO_LARGE');
   });
 

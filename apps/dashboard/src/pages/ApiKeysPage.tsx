@@ -8,7 +8,8 @@ import { Modal } from '../components/ui/Modal.js';
 import { Button } from '../components/ui/Button.js';
 import { Badge } from '../components/ui/Badge.js';
 import { Card } from '../components/ui/Card.js';
-import { Spinner } from '../components/ui/Spinner.js';
+import { ErrorState } from '../components/ui/ErrorState.js';
+import { Skeleton } from '../components/ui/Skeleton.js';
 import { useToast } from '../contexts/ToastContext.js';
 import { useApiKeys, useCreateApiKey, useRevokeApiKey } from '../hooks/useApiKeys.js';
 
@@ -110,18 +111,17 @@ export function ApiKeysPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex min-h-48 items-center justify-center" aria-label="Loading API keys">
-          <Spinner className="size-6 text-blue-400" />
+        <div role="status" aria-label="Loading API keys" className="space-y-3">
+          {Array.from({ length: 3 }, (_, index) => (
+            <Skeleton key={index} variant="card" className="h-28" />
+          ))}
         </div>
       ) : isError ? (
-        <Card className="flex flex-col items-center gap-3 py-10 text-center">
-          <p role="alert" className="text-sm text-red-300">
-            {error instanceof Error ? error.message : 'Could not load API keys.'}
-          </p>
-          <Button variant="secondary" size="sm" onClick={() => void refetch()}>
-            Try again
-          </Button>
-        </Card>
+        <ErrorState
+          title="Could not load API keys"
+          message={error instanceof Error ? error.message : 'Please try again.'}
+          onRetry={() => void refetch()}
+        />
       ) : apiKeys?.length ? (
         <div className="grid gap-3">
           {apiKeys.map((apiKey) => (

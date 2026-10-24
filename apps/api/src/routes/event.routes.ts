@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { DeliveryStatus } from '@hookrelay/shared';
 import { sendSuccess } from '../http/response.js';
 import { authenticate, getAuthenticatedDeveloper } from '../middleware/authenticate.js';
@@ -13,6 +14,34 @@ export const eventRoutes: Router = Router();
 
 eventRoutes.use(authenticate);
 
+const eventListQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    status: z
+      .enum([
+        DeliveryStatus.SUCCESS,
+        DeliveryStatus.PENDING,
+        DeliveryStatus.FAILED,
+        DeliveryStatus.DEAD_LETTER,
+      ])
+      .optional(),
+    targetUrl: z.string().trim().max(2048).optional(),
+    startDate: z.iso
+      .datetime()
+      .transform((value) => new Date(value))
+      .optional(),
+    endDate: z.iso
+      .datetime()
+      .transform((value) => new Date(value))
+      .optional(),
+  })
+  .strict()
+  .refine(
+    ({ startDate, endDate }) => !startDate || !endDate || startDate.getTime() <= endDate.getTime(),
+    { path: ['endDate'], message: 'End date must be on or after the start date' },
+  );
+
 eventRoutes.get('/stats', async (req, res) => {
   const developer = getAuthenticatedDeveloper(req);
   const result = await webhookService.getEventStats(developer.id);
@@ -21,34 +50,17 @@ eventRoutes.get('/stats', async (req, res) => {
 
 eventRoutes.get('/', async (req, res) => {
   const developer = getAuthenticatedDeveloper(req);
-  const { page, limit, status, targetUrl, startDate, endDate } = req.query;
-
-  const parsedPage = typeof page === 'string' ? Number.parseInt(page, 10) : undefined;
-  const parsedLimit = typeof limit === 'string' ? Number.parseInt(limit, 10) : undefined;
-  const parsedStatus =
-    typeof status === 'string' &&
-    status !== DeliveryStatus.QUEUED &&
-    status !== DeliveryStatus.DELIVERING &&
-    Object.values(DeliveryStatus).includes(status as DeliveryStatus)
-      ? (status as DeliveryStatus)
-      : undefined;
-  const parsedTargetUrl = typeof targetUrl === 'string' ? targetUrl : undefined;
-  const parsedStartDate =
-    typeof startDate === 'string' && !Number.isNaN(Date.parse(startDate))
-      ? new Date(startDate)
-      : undefined;
-  const parsedEndDate =
-    typeof endDate === 'string' && !Number.isNaN(Date.parse(endDate))
-      ? new Date(endDate)
-      : undefined;
+  const { page, limit, status, targetUrl, startDate, endDate } = eventListQuerySchema.parse(
+    req.query,
+  );
 
   const result = await webhookService.listEvents(developer.id, {
-    page: parsedPage,
-    limit: parsedLimit,
-    status: parsedStatus,
-    targetUrl: parsedTargetUrl,
-    startDate: parsedStartDate,
-    endDate: parsedEndDate,
+    page,
+    limit,
+    status,
+    targetUrl,
+    startDate,
+    endDate,
   });
 
   sendSuccess(res, 200, result);

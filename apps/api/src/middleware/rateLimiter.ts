@@ -2,6 +2,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { Plan } from '@hookrelay/shared';
 import { getRedisConnection } from '../config/redis.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('api-key-rate-limiter');
 
 const PLAN_REQUEST_LIMITS: Record<Plan, number> = {
   free: 100,
@@ -123,7 +126,7 @@ export function createApiKeyRateLimiter(options: RateLimiterOptions): RequestHan
         next();
       })
       .catch((error: unknown) => {
-        console.error('[hookrelay-api] Redis rate limiter failed:', error);
+        logger.error({ err: error, developerId: req.developer?.id }, 'Redis rate limiter failed');
         sendUnavailable(res);
       });
   };

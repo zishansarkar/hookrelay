@@ -18,6 +18,9 @@ export interface DeveloperDocument extends DeveloperRecord {
   /** bcrypt hash of the developer's password. Never selected by default. */
   passwordHash: string;
   lastLoginAt: Date | null;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  subscriptionStatus: 'active' | 'past_due' | 'cancelled' | null;
 }
 
 /**
@@ -42,6 +45,13 @@ const DeveloperSchema = new Schema<DeveloperDocument>(
     companyName: { type: String, default: null },
     plan: { type: String, enum: PLANS, required: true, default: 'free' },
     webhooksUsedThisMonth: { type: Number, required: true, default: 0 },
+    stripeCustomerId: { type: String, default: undefined, index: true },
+    stripeSubscriptionId: { type: String, default: undefined, index: true },
+    subscriptionStatus: {
+      type: String,
+      enum: ['active', 'past_due', 'cancelled', null],
+      default: null,
+    },
     lastLoginAt: { type: Date, default: null },
     createdAt: { type: Date, required: true, default: () => new Date() },
   },
@@ -50,6 +60,8 @@ const DeveloperSchema = new Schema<DeveloperDocument>(
     toJSON: {
       transform: (_doc, ret: Record<string, unknown>) => {
         delete ret.passwordHash;
+        delete ret.stripeCustomerId;
+        delete ret.stripeSubscriptionId;
         delete ret.__v;
         return ret;
       },

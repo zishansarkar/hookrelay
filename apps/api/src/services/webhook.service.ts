@@ -12,6 +12,9 @@ import { HttpError } from '../errors/http-error.js';
 import { addWebhookJob } from '../queues/webhook.queue.js';
 import { DeliveryAttempt, Developer, WebhookEvent as WebhookEventModel } from '../models/index.js';
 import { isWithinLimit, trackUsage } from './usage.service.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('webhooks');
 
 /**
  * Pagination defaults for the events listing endpoint.
@@ -121,7 +124,10 @@ export async function send(
       replayId: randomUUID(),
     });
   } catch (error) {
-    console.error('[hookrelay-api] failed to enqueue webhook job', error);
+    logger.error(
+      { err: error, eventId: event.id, developerId, targetUrl: event.targetUrl },
+      'Failed to enqueue webhook job',
+    );
     event.status = DeliveryStatus.FAILED;
     await event.save();
     throw new HttpError(
@@ -164,6 +170,10 @@ export interface EventStats {
   pending: number;
 }
 
+function escapeRegexLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Paginated list of events with optional filtering.
  */
@@ -182,7 +192,7 @@ export async function listEvents(
   }
 
   if (options.targetUrl) {
-    query.targetUrl = { $regex: options.targetUrl, $options: 'i' };
+    query.targetUrl = { $regex: escapeRegexLiteral(options.targetUrl), $options: 'i' };
   }
   if (options.startDate || options.endDate) {
     query.createdAt = {
@@ -349,7 +359,10 @@ export async function replayEvent(developerId: string, eventId: string): Promise
       developerId: event.developerId,
     });
   } catch (error) {
-    console.error('[hookrelay-api] failed to enqueue replay job', error);
+    logger.error(
+      { err: error, eventId: event.id, developerId, targetUrl: event.targetUrl },
+      'Failed to enqueue replay job',
+    );
     event.status = previousState.status;
     event.attempts = previousState.attempts;
     event.nextRetryAt = previousState.nextRetryAt;

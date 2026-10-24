@@ -122,6 +122,7 @@ describe('delivery worker processor', () => {
         eventId: event.id,
         attemptNumber: 1,
       }),
+      1_000,
     );
   });
 });

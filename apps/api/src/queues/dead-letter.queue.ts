@@ -1,6 +1,9 @@
 import { Queue, type Job } from 'bullmq';
 import { QUEUE_NAMES } from '@hookrelay/shared';
 import { getRedisConnection } from '../config/redis.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('dead-letter-queue');
 
 /**
  * Shape of a job stored in the dead-letter queue.
@@ -24,7 +27,7 @@ export const deadLetterQueue = new Queue<DeadLetterJobData, void>(QUEUE_NAMES.de
 });
 
 deadLetterQueue.on('error', (error: Error) => {
-  console.error(`[hookrelay-api] queue "${QUEUE_NAMES.deadLetter}" error: ${error.message}`);
+  logger.error({ err: error, queue: QUEUE_NAMES.deadLetter }, 'Queue error');
 });
 
 /**

@@ -6,13 +6,13 @@ import {
   LogOut,
   Menu,
   Settings,
-  Webhook,
   X,
   Zap,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../../contexts/AuthContext.js';
 import { Button } from '../ui/Button.js';
+import { Logo } from '../ui/Logo.js';
 
 const navigation = [
   { label: 'Events', to: '/events', icon: Activity },
@@ -28,17 +28,12 @@ export function DashboardLayout() {
   const sidebar = (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center justify-between border-b border-gray-800 px-5">
-        <NavLink to="/events" className="flex items-center gap-3" onClick={() => setIsOpen(false)}>
-          <span className="flex size-8 items-center justify-center rounded-lg bg-blue-600 text-white">
-            <Webhook className="size-4" />
-          </span>
-          <span className="text-sm font-semibold tracking-tight text-white">HookRelay</span>
-        </NavLink>
+        <Logo onClick={() => setIsOpen(false)} />
         <button
           type="button"
           aria-label="Close navigation"
           onClick={() => setIsOpen(false)}
-          className="rounded-md p-1 text-gray-500 hover:text-white lg:hidden"
+          className="rounded-md p-1 text-gray-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 lg:hidden"
         >
           <X className="size-5" />
         </button>
@@ -54,10 +49,10 @@ export function DashboardLayout() {
             onClick={() => setIsOpen(false)}
             className={({ isActive }) =>
               clsx(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                'flex items-center gap-3 rounded-r-lg border-l-2 px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
                 isActive
-                  ? 'bg-blue-500/10 text-blue-300'
-                  : 'text-gray-400 hover:bg-gray-800/70 hover:text-gray-100',
+                  ? 'border-blue-400 bg-blue-500/10 text-blue-200'
+                  : 'border-transparent text-gray-400 hover:bg-gray-800/70 hover:text-gray-100',
               )
             }
           >
@@ -92,7 +87,7 @@ export function DashboardLayout() {
           <button
             type="button"
             aria-label="Close navigation overlay"
-            className="absolute inset-0 bg-black/60"
+            className="absolute inset-0 bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
             onClick={() => setIsOpen(false)}
           />
           <aside className="absolute inset-y-0 left-0 w-72 border-r border-gray-800 bg-[#0d1423] shadow-2xl">
@@ -107,12 +102,12 @@ export function DashboardLayout() {
               type="button"
               aria-label="Open navigation"
               onClick={() => setIsOpen(true)}
-              className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white lg:hidden"
+              className="rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 lg:hidden"
             >
               <Menu className="size-5" />
             </button>
             <div className="lg:hidden">
-              <span className="text-sm font-semibold text-white">HookRelay</span>
+              <Logo compact />
             </div>
           </div>
           <div className="ml-auto flex items-center gap-3">
@@ -126,7 +121,7 @@ export function DashboardLayout() {
           </div>
         </header>
         <main className="min-h-[calc(100vh-4rem)] overflow-x-hidden px-4 py-7 sm:px-6 sm:py-8 lg:px-8">
-          <div className="mx-auto w-full max-w-7xl">
+          <div key={window.location.pathname} className="mx-auto w-full max-w-7xl animate-fade-in">
             <Outlet />
           </div>
         </main>

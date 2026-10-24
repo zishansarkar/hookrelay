@@ -109,6 +109,47 @@ describe('event list API', () => {
     });
   });
 
+  it('treats target URL search input as a literal and rejects invalid pagination', async () => {
+    await Developer.create({
+      id: developerId,
+      email: 'events-list@example.com',
+      passwordHash: 'test-hash',
+    });
+    await WebhookEvent.create([
+      {
+        developerId,
+        targetUrl: 'https://receiver.example/a.b',
+        httpMethod: 'POST',
+        headers: {},
+        payload: {},
+        status: DeliveryStatus.SUCCESS,
+      },
+      {
+        developerId,
+        targetUrl: 'https://receiver.example/axb',
+        httpMethod: 'POST',
+        headers: {},
+        payload: {},
+        status: DeliveryStatus.SUCCESS,
+      },
+    ]);
+
+    const literalSearch = await request(app)
+      .get('/v1/events')
+      .query({ targetUrl: 'a.b' })
+      .set('Authorization', `Bearer ${token}`);
+    expect(literalSearch.status).toBe(200);
+    expect(literalSearch.body.data.events).toHaveLength(1);
+    expect(literalSearch.body.data.events[0].targetUrl).toBe('https://receiver.example/a.b');
+
+    const invalidPage = await request(app)
+      .get('/v1/events')
+      .query({ page: '0' })
+      .set('Authorization', `Bearer ${token}`);
+    expect(invalidPage.status).toBe(400);
+    expect(invalidPage.body.code).toBe('VALIDATION_ERROR');
+  });
+
   it('includes captured request and response headers in event delivery details', async () => {
     await Developer.create({
       id: developerId,

@@ -27,7 +27,7 @@ export function EventStatusBadge({ status }: EventStatusBadgeProps) {
   const config = statusConfig[status];
   const { Icon } = config;
   return (
-    <Badge variant={config.variant} className="gap-1.5 whitespace-nowrap">
+    <Badge variant={config.variant} className={`gap-1.5 whitespace-nowrap ${config.label === 'Pending' ? 'animate-pulse' : ''}`}>
       <Icon className="size-3.5" aria-hidden="true" />
       {config.label}
     </Badge>

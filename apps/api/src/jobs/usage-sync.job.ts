@@ -1,5 +1,8 @@
 import { getRedisConnection } from '../config/redis.js';
 import { resetMonthlyUsage, syncUsageToMongo } from '../services/usage.service.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('usage-sync');
 
 const USAGE_SYNC_INTERVAL_MS = 60_000;
 
@@ -25,7 +28,7 @@ async function runUsageSync(): Promise<void> {
   try {
     await syncUsageToMongo();
   } catch (error) {
-    console.error('[hookrelay-api] periodic usage sync failed:', error);
+    logger.error({ err: error }, 'Periodic usage sync failed');
   } finally {
     isSyncRunning = false;
   }
@@ -39,9 +42,9 @@ async function runMonthlyReset(): Promise<void> {
   const now = new Date();
   try {
     await resetMonthlyUsage();
-    console.info(`[hookrelay-api] monthly usage reset completed for ${currentUtcMonthKey(now)}`);
+    logger.info({ month: currentUtcMonthKey(now) }, 'Monthly usage reset completed');
   } catch (error) {
-    console.error('[hookrelay-api] monthly usage reset failed:', error);
+    logger.error({ err: error, month: currentUtcMonthKey(now) }, 'Monthly usage reset failed');
   } finally {
     isResetRunning = false;
   }
@@ -63,7 +66,7 @@ export function startUsageSyncJob(): void {
     .ping()
     .then(() => runUsageSync())
     .catch((error: unknown) => {
-      console.error('[hookrelay-api] usage sync job could not reach Redis:', error);
+      logger.error({ err: error }, 'Usage sync job could not reach Redis');
     });
   syncTimer = setInterval(() => void runUsageSync(), USAGE_SYNC_INTERVAL_MS);
   syncTimer.unref();

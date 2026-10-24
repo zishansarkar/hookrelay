@@ -8,11 +8,17 @@
 import { connectDatabase, disconnectDatabase } from '../config/database.js';
 import { loadConfig } from '../config/environment.js';
 import { ApiKey, Developer, hashPassword } from '../models/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('db-check');
 
 async function main(): Promise<void> {
   const config = loadConfig();
 
-  console.info(`[db:check] connecting to ${config.databaseUrl.replace(/\/\/[^@]*@/, '//***@')}`);
+  logger.info(
+    { databaseUrl: config.databaseUrl.replace(/\/\/[^@]*@/, '//***@') },
+    'Connecting to MongoDB',
+  );
   await connectDatabase();
 
   const developer = await Developer.create({
@@ -20,8 +26,11 @@ async function main(): Promise<void> {
     passwordHash: await hashPassword('db-check-password'),
     companyName: 'HookRelay DB Check',
   });
-  console.info(`[db:check] developer created  : ${developer.id} (${developer.email})`);
-  console.info(`[db:check] password hashed    : ${developer.passwordHash.startsWith('$2')}`);
+  logger.info({ developerId: developer.id, email: developer.email }, 'Test developer created');
+  logger.info(
+    { passwordHashed: developer.passwordHash.startsWith('$2') },
+    'Password hash verified',
+  );
 
   const { rawKey, hashedKey } = ApiKey.generateKey();
   const apiKey = await ApiKey.create({
@@ -30,23 +39,23 @@ async function main(): Promise<void> {
     lastFour: rawKey.slice(-4),
     name: 'db-check',
   });
-  console.info(`[db:check] api key created    : ${apiKey.id} (raw ${rawKey})`);
+  logger.info({ apiKeyId: apiKey.id, keyLastFour: rawKey.slice(-4) }, 'Test API key created');
 
   const found = await ApiKey.findByRawKey(rawKey);
-  console.info(`[db:check] raw key lookup     : ${found ? 'found' : 'NOT FOUND'}`);
+  logger.info({ keyFound: Boolean(found) }, 'API key lookup completed');
 
   const collections = await Developer.db.collection('developers').find({}).toArray();
-  console.info(`[db:check] developers in db    : ${collections.length}`);
+  logger.info({ developerCount: collections.length }, 'Developer collection inspected');
 
   await ApiKey.deleteOne({ _id: apiKey._id });
   await Developer.deleteOne({ _id: developer._id });
-  console.info('[db:check] cleanup done');
+  logger.info('Database check cleanup completed');
 
   await disconnectDatabase();
-  console.info('[db:check] OK — database connection and models work');
+  logger.info('Database connection and models verified');
 }
 
 main().catch((error: unknown) => {
-  console.error('[db:check] FAILED:', error instanceof Error ? error.message : error);
+  logger.fatal({ err: error }, 'Database check failed');
   process.exitCode = 1;
 });

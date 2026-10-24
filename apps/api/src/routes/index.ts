@@ -4,3 +4,5 @@ export * from './event.routes.js';
 export * from './apiKey.routes.js';
 export * from './verification.routes.js';
 export * from './usage.routes.js';
+export * from './billing.routes.js';
+export * from './metrics.routes.js';
