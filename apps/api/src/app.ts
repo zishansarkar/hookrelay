@@ -7,7 +7,15 @@ import { API_PREFIX, MAX_PAYLOAD_SIZE_BYTES } from '@hookrelay/shared';
 import type { AppConfig } from './config/environment.js';
 import { createErrorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { globalRateLimiter } from './middleware/rate-limiter.js';
-import { apiKeyRoutes, authRoutes, eventRoutes, webhookRoutes } from './routes/index.js';
+import { requestIdMiddleware } from './middleware/security.js';
+import {
+  apiKeyRoutes,
+  authRoutes,
+  eventRoutes,
+  usageRoutes,
+  verificationRoutes,
+  webhookRoutes,
+} from './routes/index.js';
 
 /**
  * Liveness/readiness probe.
@@ -33,6 +41,7 @@ export function createApp(config: AppConfig): Express {
 
   // Never advertise the framework.
   app.disable('x-powered-by');
+  app.use(requestIdMiddleware);
 
   // `trust proxy` stays off by default: enabling it would let clients spoof
   // `X-Forwarded-For` and bypass the per-IP rate limiter. Turn it on only when
@@ -57,6 +66,8 @@ export function createApp(config: AppConfig): Express {
   app.use(`${API_PREFIX}/webhooks`, webhookRoutes);
   app.use(`${API_PREFIX}/events`, eventRoutes);
   app.use(`${API_PREFIX}/api-keys`, apiKeyRoutes);
+  app.use(`${API_PREFIX}/usage`, usageRoutes);
+  app.use(verificationRoutes);
 
   app.use(notFoundHandler);
   app.use(createErrorHandler(config));

@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import { sendSuccess } from '../http/response.js';
 import { getAuthenticatedDeveloper } from '../middleware/authenticate.js';
 import { authenticateApiKey } from '../middleware/authenticateApiKey.js';
-import { validate } from '../middleware/validate.js';
+import { apiKeyRateLimiter } from '../middleware/rateLimiter.js';
 import * as webhookService from '../services/webhook.service.js';
-import { sendWebhookSchema } from '../validators/webhook.validators.js';
+import { createSendWebhookSchema } from '../validators/webhook.validators.js';
+import { loadConfig } from '../config/environment.js';
+import { sanitizeHeaders } from '../middleware/security.js';
 
 /**
  * Webhook ingestion routes.
@@ -14,10 +15,48 @@ import { sendWebhookSchema } from '../validators/webhook.validators.js';
  */
 export const webhookRoutes: Router = Router();
 
-webhookRoutes.post('/send', authenticateApiKey, validate(sendWebhookSchema), async (req, res) => {
-  const developer = getAuthenticatedDeveloper(req);
+webhookRoutes.post(
+  '/send',
+  authenticateApiKey,
+  apiKeyRateLimiter,
+  sanitizeHeaders,
+  (req, res, next) => {
+    const developer = getAuthenticatedDeveloper(req);
+    const config = loadConfig();
+    const schema = createSendWebhookSchema({
+      nodeEnv: config.nodeEnv,
+      plan: developer.plan,
+    });
+    void schema
+      .safeParseAsync(req.body)
+      .then((result) => {
+        if (!result.success) {
+          const body = {
+            error: 'Validation failed',
+            code: 'VALIDATION_ERROR',
+            details: result.error.issues.map((issue) => ({
+              field: issue.path.map(String).join('.') || 'body',
+              message: issue.message,
+            })),
+          };
+          res.status(400).json(body);
+          return;
+        }
 
-  const result = await webhookService.sendWebhook(developer.id, sendWebhookSchema.parse(req.body));
+        req.body = result.data;
+        next();
+      })
+      .catch(next);
+  },
+  async (req, res) => {
+    const developer = getAuthenticatedDeveloper(req);
 
-  sendSuccess(res, 202, result);
-});
+    const result = await webhookService.send(developer.id, req.body);
+
+    res.status(202).json({
+      eventId: result.eventId,
+      status: result.status,
+      message: result.message,
+    });
+  },
+);

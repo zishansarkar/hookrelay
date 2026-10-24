@@ -1,11 +1,12 @@
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 const sharedSrcDir = fileURLToPath(new URL('../../packages/shared/src', import.meta.url));
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     // Resolve the workspace package straight from TypeScript source so the
     // dashboard never depends on a stale `packages/shared/dist` build.

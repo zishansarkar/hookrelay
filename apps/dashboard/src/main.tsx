@@ -1,15 +1,31 @@
-/**
- * HookRelay dashboard entrypoint.
- * React / ReactDOM are added in the next milestone — this stub keeps the
- * file tree valid and lets the shared package resolve correctly.
- */
-import { DeliveryStatus, type WebhookEvent } from '@hookrelay/shared';
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter } from 'react-router-dom';
+import App from './App.js';
+import { AuthProvider } from './contexts/AuthContext.js';
+import { ToastProvider } from './contexts/ToastContext.js';
+import './index.css';
 
-const demoEvent: Pick<WebhookEvent, 'id' | 'status' | 'targetUrl'> = {
-  id: 'evt_scaffold',
-  status: DeliveryStatus.PENDING,
-  targetUrl: 'https://example.com/webhook',
-};
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
-// eslint-disable-next-line no-console
-console.info('[hookrelay-dashboard] scaffold loaded', demoEvent);
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <ToastProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </ToastProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
+  </React.StrictMode>,
+);

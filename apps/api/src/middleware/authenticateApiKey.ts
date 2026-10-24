@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { ApiErrorResponse } from '@hookrelay/shared';
-import { PLAN_LIMITS } from '@hookrelay/shared';
 import * as apiKeyService from '../services/apiKey.service.js';
+import { isWithinLimit } from '../services/usage.service.js';
 
 const API_KEY_HEADER = 'x-api-key';
 
@@ -20,7 +20,7 @@ function sendQuotaExceeded(res: Response, message: string): void {
     code: 'QUOTA_EXCEEDED',
   };
 
-  res.status(403).json(body);
+  res.status(429).json(body);
 }
 
 /**
@@ -31,8 +31,8 @@ function sendQuotaExceeded(res: Response, message: string): void {
  * `Authorization: Bearer`. On success both attach the same `req.developer`
  * shape so handlers do not care how the request was authenticated.
  *
- * Responds 401 for a missing/invalid/inactive key and 403 when the
- * developer's monthly webhook quota is exhausted.
+ * Responds 401 for a missing/invalid/inactive key and 429 when the developer's
+ * monthly webhook quota is exhausted.
  */
 export async function authenticateApiKey(
   req: Request,
@@ -54,13 +54,8 @@ export async function authenticateApiKey(
   }
 
   const { developer } = result;
-  const { monthlyWebhooks } = PLAN_LIMITS[developer.plan];
-
-  if (developer.webhooksUsedThisMonth >= monthlyWebhooks) {
-    sendQuotaExceeded(
-      res,
-      `Monthly webhook quota exceeded (${monthlyWebhooks} on the ${developer.plan} plan)`,
-    );
+  if (!(await isWithinLimit(developer.id))) {
+    sendQuotaExceeded(res, 'Monthly webhook quota exceeded for the current plan');
     return;
   }
 

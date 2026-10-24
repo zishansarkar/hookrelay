@@ -14,6 +14,7 @@ export const RATE_LIMIT_MAX_REQUESTS = 100;
 export const globalRateLimiter: RequestHandler = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   limit: RATE_LIMIT_MAX_REQUESTS,
+  skip: (req) => req.path === '/v1/webhooks/send',
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   handler: (_req, res) => {

@@ -54,6 +54,7 @@ const DEFAULT_PORT = 3001;
 const DEFAULT_NODE_ENV: NodeEnv = 'development';
 const DEFAULT_REDIS_URL = 'redis://localhost:6379';
 const DEFAULT_FRONTEND_URL = 'http://localhost:5173';
+const DEFAULT_WORKER_CONCURRENCY = 10;
 
 /** Variables that must always be present. */
 const REQUIRED_ENV_VARS = ['DATABASE_URL'] as const;
@@ -68,6 +69,7 @@ export interface AppConfig {
   nodeEnv: NodeEnv;
   isProduction: boolean;
   port: number;
+  workerConcurrency: number;
   databaseUrl: string;
   redisUrl: string;
   jwtSecret: string | null;
@@ -101,6 +103,19 @@ function readPort(env: NodeJS.ProcessEnv): number {
   return port;
 }
 
+function readWorkerConcurrency(env: NodeJS.ProcessEnv): number {
+  const raw = env.WORKER_CONCURRENCY?.trim();
+  if (!raw) {
+    return DEFAULT_WORKER_CONCURRENCY;
+  }
+
+  const concurrency = Number(raw);
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 1_000) {
+    throw new Error('Invalid WORKER_CONCURRENCY. Expected an integer between 1 and 1000.');
+  }
+  return concurrency;
+}
+
 function readOptional(env: NodeJS.ProcessEnv, name: string): string | null {
   const value = env[name]?.trim();
   return value ? value : null;
@@ -130,6 +145,7 @@ export function validateEnvironment(env: NodeJS.ProcessEnv = process.env): AppCo
     nodeEnv,
     isProduction: nodeEnv === 'production',
     port: readPort(env),
+    workerConcurrency: readWorkerConcurrency(env),
     databaseUrl: env.DATABASE_URL!.trim(),
     redisUrl: env.REDIS_URL?.trim() || DEFAULT_REDIS_URL,
     jwtSecret: readOptional(env, 'JWT_SECRET'),

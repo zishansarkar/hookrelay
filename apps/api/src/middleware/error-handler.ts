@@ -53,6 +53,16 @@ export function createErrorHandler(config: AppConfig): ErrorRequestHandler {
       return;
     }
 
+    const parserError = error as { type?: unknown } | null;
+    if (parserError?.type === 'entity.too.large') {
+      const body: ApiErrorResponse = {
+        error: 'Request payload exceeds the maximum allowed size',
+        code: 'PAYLOAD_TOO_LARGE',
+      };
+      res.status(400).json(body);
+      return;
+    }
+
     const status = resolveStatus(error);
     const isServerError = status >= 500;
 

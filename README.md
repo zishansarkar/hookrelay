@@ -38,6 +38,7 @@ npm run dev:dashboard
 ```
 
 > Backend defaults to `http://localhost:3001`, dashboard to `http://localhost:5173`.
+> The API process also starts the BullMQ webhook delivery worker; it closes the worker gracefully on shutdown.
 
 ---
 
