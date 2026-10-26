@@ -20,10 +20,9 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "baseUrl": ".",
     "paths": {
-      "@hookrelay/shared": ["packages/shared/src/index.ts"],
-      "@hookrelay/shared/*": ["packages/shared/src/*"]
+      "@hookrelay/shared": ["./packages/shared/src/index.ts"],
+      "@hookrelay/shared/*": ["./packages/shared/src/*"]
     }
   },
   "exclude": ["node_modules", "dist", "build"]
