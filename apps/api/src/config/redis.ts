@@ -25,22 +25,30 @@ function describeUrl(redisUrl: string): string {
 
 /**
  * Creates a Redis connection from `REDIS_URL`.
- *
- * TLS is enabled automatically for `rediss://` URLs, which is what production
- * deployments use; plain `redis://` stays unencrypted for local development.
- *
- * `maxRetriesPerRequest: null` is required by BullMQ: commands must not be
- * rejected while the connection is re-establishing.
  */
 export function createRedisConnection(connectionName = 'hookrelay-api'): Redis {
   const { redisUrl } = loadConfig();
   const usesTls = redisUrl.startsWith('rediss://');
 
+  let servername: string | undefined;
+  try {
+    servername = new URL(redisUrl).hostname;
+  } catch {
+    // fallback if URL parsing fails
+  }
+
   const options: RedisOptions = {
     connectionName,
     maxRetriesPerRequest: null,
-    family: 4, // 👈 Render ও Upstash-এর মধ্যে IPv6 টাইমআউট সমস্যা সমাধানের জন্য এই লাইনটি যোগ করা হয়েছে
-    ...(usesTls ? { tls: {} } : {}),
+    family: 4, // IPv4
+    ...(usesTls
+      ? {
+          tls: {
+            rejectUnauthorized: false, // 👈 Render & Upstash TLS হ্যান্ডশেক ফিক্স
+            servername,
+          },
+        }
+      : {}),
   };
 
   const connection = new Redis(redisUrl, options);
@@ -63,22 +71,11 @@ export function createRedisConnection(connectionName = 'hookrelay-api'): Redis {
 
 let sharedConnection: Redis | null = null;
 
-/**
- * Returns the process-wide Redis connection, creating it on first use.
- *
- * Queues share this connection; it is also the one closed on shutdown.
- */
 export function getRedisConnection(): Redis {
   sharedConnection ??= createRedisConnection();
   return sharedConnection;
 }
 
-/**
- * Verifies that Redis is reachable, failing fast at startup otherwise.
- *
- * The connection retries indefinitely, so a timeout is needed to turn an
- * unreachable server into a readable startup error instead of a hang.
- */
 export async function verifyRedisConnection(timeoutMs = VERIFY_TIMEOUT_MS): Promise<void> {
   const { redisUrl } = loadConfig();
   const connection = getRedisConnection();
@@ -104,12 +101,6 @@ export async function verifyRedisConnection(timeoutMs = VERIFY_TIMEOUT_MS): Prom
   }
 }
 
-/**
- * Closes the shared connection, waiting for pending commands first.
- *
- * Falls back to an immediate disconnect if `quit()` does not settle in time,
- * so shutdown can never hang on Redis.
- */
 export async function closeRedisConnection(): Promise<void> {
   const connection = sharedConnection;
   if (!connection) {
