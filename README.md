@@ -152,6 +152,8 @@ The receiver gets the original JSON payload and HookRelay signature headers (`x-
 4. Set `FRONTEND_URL` to the deployed Vercel origin. Configure the Stripe variables if billing is enabled.
 5. Deploy the dashboard to Vercel and set its `VITE_API_URL` to the Render API origin.
 
+If you create a Render **Node** web service instead of using the Blueprint's Docker service, set its Root Directory to the repository root, Build Command to `npm ci --include=dev && npm run build --workspace=@hookrelay/shared && npm run build --workspace=@hookrelay/api`, and Start Command to `npm run start --workspace=@hookrelay/api`. The explicit `--include=dev` is required because TypeScript and the API's `@types/*` packages are development dependencies needed during compilation, while Render may otherwise omit them when `NODE_ENV=production`.
+
 ### Fly.io API
 
 The alternative configuration is `apps/api/fly.toml`. Create or select a Fly app named `hookrelay-api`, configure its secrets and external database/Redis, then deploy from the repository root:

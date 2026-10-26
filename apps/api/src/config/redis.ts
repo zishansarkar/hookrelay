@@ -39,6 +39,7 @@ export function createRedisConnection(connectionName = 'hookrelay-api'): Redis {
   const options: RedisOptions = {
     connectionName,
     maxRetriesPerRequest: null,
+    family: 4, // 👈 Render ও Upstash-এর মধ্যে IPv6 টাইমআউট সমস্যা সমাধানের জন্য এই লাইনটি যোগ করা হয়েছে
     ...(usesTls ? { tls: {} } : {}),
   };
 
