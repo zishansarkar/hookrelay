@@ -82,9 +82,9 @@ async function getOrCreateCustomer(developerId: string): Promise<{
 
 export async function createCheckoutSession(developerId: string, plan: PaidPlan): Promise<string> {
   const stripeClient = requireStripe();
+  const priceId = getPriceId(plan);
   const customer = await getOrCreateCustomer(developerId);
   const config = loadConfig();
-  const priceId = getPriceId(plan);
   const frontendUrl = config.frontendUrl.replace(/\/+$/, '');
   const session = await stripeClient.checkout.sessions.create({
     mode: 'subscription',

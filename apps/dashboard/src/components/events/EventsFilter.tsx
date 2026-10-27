@@ -102,12 +102,12 @@ export function EventsFilter({
               aria-label="Date range"
               value={dateRange}
               onChange={(event) => onDateRangeChange(event.target.value as EventDateRange)}
-              className="min-w-28 bg-transparent text-sm outline-none"
+              className="min-w-28 bg-transparent text-sm text-gray-200 outline-none [color-scheme:dark]"
             >
-              <option value="today">Today</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="custom">Custom range</option>
+              <option className="bg-[#111827] text-gray-100" value="today">Today</option>
+              <option className="bg-[#111827] text-gray-100" value="7d">Last 7 days</option>
+              <option className="bg-[#111827] text-gray-100" value="30d">Last 30 days</option>
+              <option className="bg-[#111827] text-gray-100" value="custom">Custom range</option>
             </select>
           </label>
         </div>

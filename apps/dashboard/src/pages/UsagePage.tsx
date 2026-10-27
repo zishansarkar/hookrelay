@@ -1,7 +1,8 @@
-import { Check, Zap } from 'lucide-react';
+import { Check, CircleAlert, Zap } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { PLAN_LIMITS, type Plan } from '@hookrelay/shared';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Badge } from '../components/ui/Badge.js';
 import { Button } from '../components/ui/Button.js';
@@ -57,6 +58,7 @@ export function UsagePage() {
   const { toast } = useToast();
   const [checkoutPlan, setCheckoutPlan] = useState<'pro' | 'team' | null>(null);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [billingUnavailable, setBillingUnavailable] = useState(false);
   const usage = usageQuery.data;
   const progress = usage ? (usage.limit > 0 ? (usage.used / usage.limit) * 100 : 0) : 0;
   const progressColor =
@@ -76,7 +78,26 @@ export function UsagePage() {
     try {
       redirectToStripe(await billingApi.createCheckoutSession(plan));
     } catch (error) {
-      toast(error instanceof Error ? error.message : 'Could not start checkout.', 'error');
+      const isUnavailable =
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof error.response === 'object' &&
+        error.response !== null &&
+        'data' in error.response &&
+        typeof error.response.data === 'object' &&
+        error.response.data !== null &&
+        'code' in error.response.data &&
+        error.response.data.code === 'BILLING_UNAVAILABLE';
+      setBillingUnavailable(isUnavailable);
+      toast(
+        isUnavailable
+          ? 'Paid plans are not available yet. Billing has not been configured.'
+          : error instanceof Error
+            ? error.message
+            : 'Could not start checkout.',
+        'error',
+      );
       setCheckoutPlan(null);
     }
   };
@@ -188,6 +209,22 @@ export function UsagePage() {
                 onRetry={() => void dailyQuery.refetch()}
               />
             </div>
+          ) : !(dailyQuery.data ?? []).some((stat) => stat.count > 0) ? (
+            <div className="flex h-72 flex-col items-center justify-center px-4 text-center">
+              <div className="mb-3 flex size-11 items-center justify-center rounded-xl border border-gray-700 bg-gray-800/60 text-gray-400">
+                <Zap className="size-5" aria-hidden="true" />
+              </div>
+              <h3 className="text-sm font-semibold text-gray-100">No webhook activity yet</h3>
+              <p className="mt-1 max-w-md text-sm text-gray-400">
+                Daily volume will appear here after you send your first webhook.
+              </p>
+              <Link
+                to="/api-keys"
+                className="mt-4 inline-flex min-h-8 items-center justify-center rounded-lg border border-gray-700 bg-gray-800 px-3 text-xs font-medium text-gray-200 transition-colors hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              >
+                Set up an API key
+              </Link>
+            </div>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart
@@ -234,6 +271,21 @@ export function UsagePage() {
           <p className="mt-1 text-sm text-gray-500">
             Choose a plan that fits your delivery volume.
           </p>
+          {billingUnavailable && (
+            <div
+              role="alert"
+              className="mt-4 flex items-start gap-3 rounded-lg border border-amber-500/25 bg-amber-500/5 p-4 text-sm text-amber-100"
+            >
+              <CircleAlert className="mt-0.5 size-5 shrink-0 text-amber-400" />
+              <div>
+                <p className="font-medium">Paid plans are not configured yet</p>
+                <p className="mt-1 text-amber-100/70">
+                  The free plan and webhook features are still available. The workspace owner must
+                  configure Stripe and the Pro and Team price IDs before upgrades can be purchased.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
           {planOrder.map((plan) => {
@@ -276,9 +328,17 @@ export function UsagePage() {
                 ) : plan !== 'free' &&
                   (usage?.plan === 'free' || (usage?.plan === 'pro' && plan === 'team')) ? (
                   <Button
-                    onClick={() => void startCheckout(plan)}
+                    onClick={() => {
+                      setBillingUnavailable(false);
+                      void startCheckout(plan);
+                    }}
                     loading={checkoutPlan === plan}
-                    disabled={checkoutPlan !== null || isOpeningPortal}
+                    disabled={billingUnavailable || checkoutPlan !== null || isOpeningPortal}
+                    title={
+                      billingUnavailable
+                        ? 'Paid plans are not configured yet.'
+                        : undefined
+                    }
                   >
                     <Zap className="size-4" /> Upgrade to {planNames[plan]}
                   </Button>
