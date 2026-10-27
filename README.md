@@ -110,7 +110,7 @@ The receiver listens only on `127.0.0.1:3002`; its success, slow, fail, intermit
 | `STRIPE_WEBHOOK_SECRET` | Billing              | Signing secret for `/v1/billing/webhook`.                                                                                                                                                                    |
 | `STRIPE_PRO_PRICE_ID`   | Billing              | Recurring Stripe Price ID for Pro.                                                                                                                                                                           |
 | `STRIPE_TEAM_PRICE_ID`  | Billing              | Recurring Stripe Price ID for Team.                                                                                                                                                                          |
-| `VITE_API_URL`          | Dashboard deployment | Public API origin used by the Vite dashboard, e.g. `https://api.example.com`. Set this in Vercel or as a build argument for the production Compose dashboard; it is a public build-time value, not a secret. |
+| `VITE_API_URL`          | Dashboard deployment | Public API origin used by the Vite dashboard, e.g. `https://api.example.com`. Do not add `/v1`; the dashboard normalizes a trailing `/v1` if present. Set this in Vercel or as a build argument for the production Compose dashboard; it is a public build-time value, not a secret. |
 | `DEMO_API_KEY`          | Local demo sender    | One-time raw API key printed by `npm run seed`; export it in the shell before running `npm run demo:send`.                                                                                                   |
 | `DEMO_HMAC_SECRET`      | Optional local demo  | Shared signing secret for the demo sender and signature-verification receiver. Defaults to the configured `HMAC_DEFAULT_SECRET`; set both consistently when testing signature verification.                        |
 | `DEMO_API_URL`          | Optional local demo  | API origin for the sender; defaults to `http://localhost:3001`.                                                                                                                                              |
@@ -175,7 +175,7 @@ Set the Stripe secret and price ID variables with `fly secrets set` when billing
 
 1. Import the repository in Vercel and set the project **Root Directory** to `apps/dashboard`.
 2. Use `npm run build` as the build command and `dist` as the output directory (also configured in `apps/dashboard/vercel.json`).
-3. Add `VITE_API_URL` in the Vercel project environment settings for each deployment environment. Use the HTTPS API origin, without a trailing `/v1`.
+3. Add `VITE_API_URL` in the Vercel project environment settings for each deployment environment. Use the HTTPS API origin, preferably without a trailing `/v1` (the dashboard strips a trailing `/v1` to avoid duplicate API prefixes).
 4. Deploy. The Vercel configuration rewrites application routes to `index.html` and adds browser security headers.
 
 ### Docker deployment

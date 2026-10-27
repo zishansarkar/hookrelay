@@ -58,8 +58,12 @@ interface ApiEnvelope<T> {
   data: T;
 }
 
+function getApiBaseUrl(value: string | undefined): string {
+  return (value ?? '').trim().replace(/\/+$/, '').replace(/\/v1$/i, '');
+}
+
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? '',
+  baseURL: getApiBaseUrl(import.meta.env.VITE_API_URL),
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
