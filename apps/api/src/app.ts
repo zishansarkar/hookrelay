@@ -117,10 +117,10 @@ export function createApp(config: AppConfig): Express {
   app.disable('x-powered-by');
   app.use(requestIdMiddleware);
 
-  // `trust proxy` stays off by default: enabling it would let clients spoof
-  // `X-Forwarded-For` and bypass the per-IP rate limiter. Turn it on only when
-  // the app is known to sit behind a single reverse proxy.
-  app.set('trust proxy', false);
+  // Render terminates the public connection at one trusted reverse proxy and
+  // forwards the client address. Trusting exactly that hop keeps IP-based
+  // rate limits accurate without trusting arbitrary client-supplied hops.
+  app.set('trust proxy', config.isProduction ? 1 : false);
 
   app.use(helmet());
   app.use(
@@ -136,6 +136,14 @@ export function createApp(config: AppConfig): Express {
   app.use(`${API_PREFIX}/billing/webhook`, express.raw({ type: 'application/json', limit: '1mb' }));
   app.use(express.json({ limit: MAX_PAYLOAD_SIZE_BYTES }));
   app.use(globalRateLimiter);
+
+  app.get('/', (_req, res) => {
+    res.status(200).json({
+      service: 'hookrelay-api',
+      status: 'ok',
+      health: '/health',
+    });
+  });
 
   app.get('/health', healthHandler);
 

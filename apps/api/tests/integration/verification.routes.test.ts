@@ -13,6 +13,23 @@ const token = sign(
 );
 
 describe('signature verification endpoints', () => {
+  it('serves a simple API root response for service probes', async () => {
+    const response = await request(app).get('/');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      service: 'hookrelay-api',
+      status: 'ok',
+      health: '/health',
+    });
+  });
+
+  it('trusts exactly one forwarded proxy hop in production', () => {
+    const productionApp = createApp({ ...config, isProduction: true });
+
+    expect(productionApp.get('trust proxy')).toBe(1);
+  });
+
   it('returns the verification guide with examples for all supported languages', async () => {
     const response = await request(app).get('/v1/docs/verification');
 
